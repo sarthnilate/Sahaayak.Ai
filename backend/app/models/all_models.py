@@ -189,6 +189,11 @@ class Report(Base):
     origin_group_id: Mapped[Optional[str]] = mapped_column(
         String(36), nullable=True, index=True, doc="Group ID for copied/forwarded claims sharing origin"
     )
+    # Phase 9: Data lifecycle retention flag
+    evidence_expired: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False,
+        doc="True when media file has been deleted by retention job; report + audit preserved"
+    )
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=get_utc_now, nullable=False, index=True
     )

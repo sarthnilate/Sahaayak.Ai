@@ -46,9 +46,12 @@ class LocalStorageProvider(StorageProvider):
         """
         Resolves path and enforces that target file cannot escape base_dir (path traversal guard).
         """
-        # Strip leading slashes to prevent root-relative traversal
-        clean_path = relative_path.lstrip("/\\")
-        resolved = os.path.abspath(os.path.join(self.base_dir, clean_path))
+        if os.path.isabs(relative_path):
+            raise BadRequestError(
+                message="Absolute paths not allowed in storage operations",
+                error_code="PATH_TRAVERSAL_DETECTED",
+            )
+        resolved = os.path.abspath(os.path.join(self.base_dir, relative_path))
         if not resolved.startswith(self.base_dir + os.sep) and resolved != self.base_dir:
             raise BadRequestError(
                 message="Path traversal detected", error_code="PATH_TRAVERSAL_DETECTED"

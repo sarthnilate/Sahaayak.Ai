@@ -101,8 +101,17 @@ def update_task(task_id: str, payload: TaskUpdate, db: Session = Depends(get_db)
     return task
 
 
+from backend.app.core.auth import get_current_user, require_role
+from backend.app.models.all_models import Incident, RoleEnum, Task, User
+
+
 @router.post("/tasks/{task_id}/approve", response_model=TaskResponse)
-def approve_task(task_id: str, payload: ApproveTaskRequest, db: Session = Depends(get_db)):
+def approve_task(
+    task_id: str,
+    payload: ApproveTaskRequest,
+    current_user: User = Depends(require_role(RoleEnum.COORDINATOR, RoleEnum.ADMIN)),
+    db: Session = Depends(get_db),
+):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")

@@ -22,6 +22,7 @@ class SahaayakException(Exception):
         details: Optional[Dict[str, Any]] = None,
     ):
         self.code = code
+        self.error_code = code
         self.message = message
         self.status_code = status_code
         self.details = details or {}
