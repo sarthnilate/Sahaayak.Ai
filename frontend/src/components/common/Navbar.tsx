@@ -44,6 +44,7 @@ export const Navbar: React.FC<Props> = ({
       ? [
           { id: 'reports', label: 'Reports Intake', icon: <Radio className="w-4 h-4" /> },
           { id: 'incidents', label: 'Incidents & Map', icon: <Layers className="w-4 h-4" /> },
+          { id: 'live-data', label: 'Official Alerts', icon: <Shield className="w-4 h-4" /> },
           { id: 'tasks', label: 'Tasks & Dispatch', icon: <CheckCircle className="w-4 h-4" /> },
           { id: 'audit', label: 'Audit Trail', icon: <Database className="w-4 h-4" /> },
         ]

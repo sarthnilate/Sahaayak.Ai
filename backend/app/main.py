@@ -1,7 +1,17 @@
 import os
 
-from backend.app.api.v1 import audit, auth, evidence, health, incidents, reports, seed, tasks
-from backend.app.api.v1 import settings as settings_api
+from backend.app.api.v1 import (
+    audit,
+    auth,
+    evidence,
+    health,
+    incidents,
+    live_sources,
+    reports,
+    seed,
+    settings as settings_api,
+    tasks,
+)
 from backend.app.core.config import settings
 from backend.app.core.errors import (
     RequestIdMiddleware,
@@ -89,6 +99,8 @@ app.include_router(tasks.router, prefix=settings.API_V1_PREFIX, tags=["Tasks"])
 app.include_router(audit.router, prefix=settings.API_V1_PREFIX, tags=["Audit"])
 app.include_router(seed.router, prefix=settings.API_V1_PREFIX, tags=["Demo Seed"])
 app.include_router(settings_api.router, prefix=settings.API_V1_PREFIX, tags=["Settings"])
+app.include_router(live_sources.router, prefix=settings.API_V1_PREFIX, tags=["Live Official Sources"])
+app.include_router(live_sources.alerts_router, prefix=settings.API_V1_PREFIX, tags=["Live Official Alerts"])
 
 
 @app.get("/")

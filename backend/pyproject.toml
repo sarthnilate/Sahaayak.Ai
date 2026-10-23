@@ -70,6 +70,9 @@ testpaths = ["backend/tests"]
 pythonpath = ["..", "."]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "live: network tests requiring external internet connectivity",
+]
 
 [tool.coverage.run]
 source = ["backend/app"]

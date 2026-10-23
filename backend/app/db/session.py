@@ -9,7 +9,7 @@ engine = create_engine(settings.DATABASE_URL, connect_args=connect_args, echo=Fa
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-Base = declarative_base()
+from backend.app.models.all_models import Base
 
 
 def get_db():

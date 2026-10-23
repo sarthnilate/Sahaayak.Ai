@@ -78,11 +78,11 @@ class Settings(BaseSettings):
         default=False, description="Enable background ingestion of external live feeds"
     )
     SACHET_FEED_URLS: List[str] = Field(
-        default=["https://sachet.ndma.gov.in/feed/cap_rss"],
-        description="NDMA SACHET CAP alert RSS/Atom feed URLs",
+        default=["https://sachet.ndma.gov.in/cap_public_website/FetchAllAlertDetails"],
+        description="NDMA SACHET CAP alert index / feed URLs",
     )
     IMD_API_BASE_URL: str = Field(
-        default="https://api.imd.gov.in/v1",
+        default="https://api.imd.gov.in/api/v1",
         description="India Meteorological Department API base URL",
     )
     IMD_API_KEY: Optional[str] = Field(default=None, description="IMD API Access Key")

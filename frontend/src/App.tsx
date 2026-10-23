@@ -8,6 +8,7 @@ import { ReportsView } from './components/views/ReportsView';
 import { IncidentsView } from './components/views/IncidentsView';
 import { TasksView } from './components/views/TasksView';
 import { AuditView } from './components/views/AuditView';
+import { LiveOfficialDataView } from './components/views/LiveOfficialDataView';
 import { getHealth, listIncidents, listReports, listTasks, seedDemoData } from './services/api';
 import { Incident, Report, Task, SystemHealth } from './types';
 import { AlertCircle, Loader2 } from 'lucide-react';
@@ -159,6 +160,10 @@ function AuthenticatedApp() {
             onRefresh={loadData}
             isLoading={isLoading}
           />
+        )}
+
+        {activeTab === 'live-data' && hasRole('coordinator', 'admin') && (
+          <LiveOfficialDataView />
         )}
 
         {activeTab === 'audit' && hasRole('coordinator', 'admin') && (

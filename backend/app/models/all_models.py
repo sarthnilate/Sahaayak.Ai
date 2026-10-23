@@ -428,6 +428,55 @@ class TaskRecommendation(Base):
     incident = relationship("Incident", back_populates="recommendations")
 
 
+class LiveSourceSnapshot(Base):
+    __tablename__ = "live_source_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    source_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=get_utc_now, nullable=False, index=True
+    )
+    http_status: Mapped[int] = mapped_column(Integer, nullable=False)
+    etag: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    item_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    raw_payload_snippet: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class ExternalAlert(Base):
+    __tablename__ = "external_alerts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    source_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    external_identifier: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    headline: Mapped[str] = mapped_column(Text, nullable=False)
+    event: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    urgency: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    certainty: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    area_description: Mapped[str] = mapped_column(Text, nullable=False)
+    language: Mapped[str] = mapped_column(String(10), default="en", nullable=False)
+    sender: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    effective_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    centroid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    raw_cap_xml: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_expired: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    retrieved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=get_utc_now, nullable=False, index=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("source_id", "external_identifier", "content_hash", name="uq_external_alert_source_id_hash"),
+    )
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 
