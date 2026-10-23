@@ -5,9 +5,9 @@ import { Shield, Eye, EyeOff, UserPlus, LogIn, AlertCircle, Loader2 } from 'luci
 export const LoginView: React.FC = () => {
   const { login, register, error, clearError, isLoading } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('coordinator@sahaayak.ai');
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('CoordPass@2026');
   const [fullName, setFullName] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
