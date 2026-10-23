@@ -213,12 +213,33 @@ export const LoginView: React.FC = () => {
           {mode === 'login' && (
             <div className="mt-6 p-3 rounded-lg bg-[#0B0B0B] border border-[#282828]">
               <p className="text-[10px] font-mono font-bold text-[#D4FF3F] uppercase tracking-wider mb-2">
-                Demo Credentials
+                Demo Credentials (Click to autofill)
               </p>
-              <div className="space-y-1 text-[11px] font-mono text-[#A7A7A7]">
-                <p><span className="text-[#FF2DA8]">Admin:</span> admin@sahaayak.ai / AdminPass@2026</p>
-                <p><span className="text-[#FF2DA8]">Coordinator:</span> coordinator@sahaayak.ai / CoordPass@2026</p>
-                <p><span className="text-[#FF2DA8]">Reporter:</span> reporter@sahaayak.ai / ReporterPass@2026</p>
+              <div className="space-y-1.5 text-[11px] font-mono">
+                <button
+                  type="button"
+                  onClick={() => { setEmail('admin@sahaayak.ai'); setPassword('AdminPass@2026'); clearError(); }}
+                  className="w-full text-left p-1.5 rounded hover:bg-[#1A1A1A] transition-colors flex items-center justify-between"
+                >
+                  <span><span className="text-[#FF2DA8] font-bold">Admin:</span> admin@sahaayak.ai</span>
+                  <span className="text-gray-500 text-[10px]">Autofill</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEmail('coordinator@sahaayak.ai'); setPassword('CoordPass@2026'); clearError(); }}
+                  className="w-full text-left p-1.5 rounded hover:bg-[#1A1A1A] transition-colors flex items-center justify-between"
+                >
+                  <span><span className="text-[#D4FF3F] font-bold">Coordinator:</span> coordinator@sahaayak.ai</span>
+                  <span className="text-gray-500 text-[10px]">Autofill</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEmail('reporter@sahaayak.ai'); setPassword('ReporterPass@2026'); clearError(); }}
+                  className="w-full text-left p-1.5 rounded hover:bg-[#1A1A1A] transition-colors flex items-center justify-between"
+                >
+                  <span><span className="text-[#60A5FA] font-bold">Reporter:</span> reporter@sahaayak.ai</span>
+                  <span className="text-gray-500 text-[10px]">Autofill</span>
+                </button>
               </div>
             </div>
           )}
