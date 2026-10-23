@@ -127,9 +127,9 @@ export const AuditView: React.FC<Props> = ({ health }) => {
                     {evt.actor}
                   </span>
                 </div>
-                {evt.details && (
+                {(evt.before_state || evt.after_state) && (
                   <div className="text-[11px] text-[#A7A7A7] truncate max-w-xl">
-                    {JSON.stringify(evt.details)}
+                    {evt.after_state ? JSON.stringify(evt.after_state) : JSON.stringify(evt.before_state)}
                   </div>
                 )}
               </div>

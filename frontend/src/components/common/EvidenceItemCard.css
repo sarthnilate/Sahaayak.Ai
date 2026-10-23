@@ -1,0 +1,257 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   EvidenceItemCard.css – Phase 6 Evidence transparency styles
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Card shell ─────────────────────────────────────────────────────────────── */
+.evidence-card {
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+  border-radius: 12px;
+  padding: 1rem 1.125rem;
+  margin-bottom: 0.75rem;
+  transition: border-color 0.2s;
+}
+
+.evidence-card:hover {
+  border-color: var(--border-active, rgba(255,255,255,0.18));
+}
+
+.evidence-card--conflict {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────────── */
+.evidence-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+
+.evidence-card__badges {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ─── Provenance badges ──────────────────────────────────────────────────────── */
+.provenance-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+.badge--official {
+  background: rgba(6, 182, 212, 0.18);
+  color: #06b6d4;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+}
+
+.badge--community {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.badge--ai {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+.badge--synthetic {
+  background: rgba(156, 163, 175, 0.18);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.4);
+}
+
+/* explicit SYNTHETIC label (always shown when is_simulated) */
+.badge--synthetic-explicit {
+  background: rgba(245, 158, 11, 0.14);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  animation: pulse-synthetic 3s ease-in-out infinite;
+}
+
+@keyframes pulse-synthetic {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+/* ─── Assessment chip ────────────────────────────────────────────────────────── */
+.assessment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.assessment-chip__icon {
+  font-style: normal;
+  font-size: 0.8rem;
+}
+
+.assessment--supports    { background: rgba(34,197,94,0.15);  color: #22c55e; border-color: rgba(34,197,94,0.3);  }
+.assessment--contradicts { background: rgba(239,68,68,0.15);  color: #ef4444; border-color: rgba(239,68,68,0.3);  }
+.assessment--neutral     { background: rgba(148,163,184,0.12); color: #94a3b8; border-color: rgba(148,163,184,0.3);}
+.assessment--contextual  { background: rgba(59,130,246,0.12); color: #60a5fa; border-color: rgba(59,130,246,0.3); }
+.assessment--unassessed  { background: rgba(107,114,128,0.12); color: #9ca3af; border-color: rgba(107,114,128,0.3);}
+
+/* ─── Body ───────────────────────────────────────────────────────────────────── */
+.evidence-card__body {
+  margin-bottom: 0.75rem;
+}
+
+.evidence-card__source-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.evidence-card__source-name {
+  font-size: 0.85rem;
+  color: var(--text-primary, #f1f5f9);
+  font-weight: 600;
+}
+
+.evidence-card__type-label {
+  font-size: 0.7rem;
+  color: var(--text-muted, #64748b);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+}
+
+.evidence-card__source-desc {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #94a3b8);
+  margin: 0.15rem 0 0.3rem;
+}
+
+.evidence-card__claim {
+  font-size: 0.82rem;
+  color: var(--text-primary, #e2e8f0);
+  margin: 0 0 0.4rem;
+  line-height: 1.5;
+}
+
+.evidence-card__excerpt {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #94a3b8);
+  border-left: 3px solid rgba(255,255,255,0.15);
+  margin: 0.4rem 0;
+  padding-left: 0.75rem;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.evidence-card__url {
+  font-size: 0.75rem;
+  color: #60a5fa;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.25rem;
+}
+.evidence-card__url:hover { text-decoration: underline; }
+.evidence-card__url--no-link {
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* ─── Meta row ───────────────────────────────────────────────────────────────── */
+.evidence-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  color: var(--text-muted, #64748b);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.evidence-card__freshness { font-weight: 500; }
+.evidence-card__ts { opacity: 0.75; }
+
+/* ─── Same-origin note ───────────────────────────────────────────────────────── */
+.evidence-card__origin-note {
+  margin-top: 0.5rem;
+  font-size: 0.73rem;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ─── Review note ────────────────────────────────────────────────────────────── */
+.evidence-card__review-note {
+  margin-top: 0.5rem;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 6px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.evidence-card__review-label {
+  font-weight: 600;
+  color: #818cf8;
+  margin-right: 0.3rem;
+}
+
+.evidence-card__reviewed-by {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+/* ─── Actions ────────────────────────────────────────────────────────────────── */
+.evidence-card__actions {
+  margin-top: 0.625rem;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+/* ─── Shared micro-button ────────────────────────────────────────────────────── */
+.btn-sm {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-weight: 600;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: var(--text-secondary, #94a3b8);
+}
+.btn-outline:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.35);
+  color: #f1f5f9;
+}

@@ -2,7 +2,7 @@ import hashlib
 import re
 import secrets
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from backend.app.core.auth import get_current_user, get_current_user_optional
 from backend.app.core.config import settings
@@ -15,13 +15,19 @@ from backend.app.db.session import get_db
 from backend.app.models.all_models import (
     Incident,
     IncidentReportLink,
+    IncidentStatusEnum,
+    LinkStatusEnum,
     Report,
     ReportStatusEnum,
     RoleEnum,
     User,
 )
 from backend.app.schemas.all_schemas import (
+    IncidentReportLinkResponse,
+    MatchCandidateResponse,
+    MatchSignalSchema,
     PaginatedReportsResponse,
+    ReportMatchesResponse,
     ReportResponse,
 )
 from backend.app.schemas.extraction_schema import CoordinatorCorrectionSchema
@@ -178,24 +184,13 @@ async def submit_report(
         force_retry=False,
     )
 
-    # 9. Candidate duplicate matching against active incidents
-    if report.processing_status == ReportStatusEnum.PROCESSED:
-        active_incidents = (
-            db.execute(select(Incident).where(Incident.status != "closed")).scalars().all()
+    # 9. Candidate duplicate matching against active incidents (pure + pre-filtered)
+    if report.processing_status in [ReportStatusEnum.PROCESSED, ReportStatusEnum.NEEDS_REVIEW]:
+        matching_service.find_and_persist_candidates_for_report(
+            db=db,
+            report_id=report.id,
+            actor=user_id or "system:matcher",
         )
-
-        for inc in active_incidents:
-            score, rationale = matching_service.evaluate_match(report, inc)
-            if score >= 0.40:
-                link = IncidentReportLink(
-                    incident_id=inc.id,
-                    report_id=report.id,
-                    status="suggested",
-                    similarity_score=score,
-                    match_rationale=rationale,
-                )
-                db.add(link)
-        db.commit()
 
     return report
 
@@ -288,6 +283,25 @@ def list_reports(
         limit=limit,
         pages=pages,
     )
+
+
+@router.get("/duplicate-suggestions", response_model=List[IncidentReportLinkResponse])
+@router.get("/reports/duplicate-suggestions", response_model=List[IncidentReportLinkResponse])
+def get_duplicate_suggestions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns all suggested duplicate links awaiting coordinator review.
+    """
+    links = (
+        db.query(IncidentReportLink)
+        .options(selectinload(IncidentReportLink.report), selectinload(IncidentReportLink.incident))
+        .filter(IncidentReportLink.status == LinkStatusEnum.SUGGESTED)
+        .order_by(IncidentReportLink.created_at.desc())
+        .all()
+    )
+    return links
 
 
 @router.get("/reports/{report_id}", response_model=ReportResponse, status_code=status.HTTP_200_OK)
@@ -472,3 +486,85 @@ def correct_report_extraction(
         coordinator_name=current_user.email,
     )
     return ReportResponse.model_validate(report)
+
+
+@router.get("/reports/{report_id}/matches", response_model=ReportMatchesResponse)
+def get_report_matches(
+    report_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns candidate matches for a report against active incidents,
+    producing structured signals, threshold band (strong/possible/weak),
+    human-readable rationale, unknowns, and same-origin detection.
+    """
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise ResourceNotFoundError(message=f"Report '{report_id}' not found", error_code="REPORT_NOT_FOUND")
+
+    # Evaluate against active incidents
+    active_incidents = (
+        db.query(Incident)
+        .filter(Incident.status != IncidentStatusEnum.CLOSED)
+        .order_by(Incident.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    matches: List[MatchCandidateResponse] = []
+    for inc in active_incidents:
+        score, rationale, eval_result = matching_service.evaluate_match(report, inc)
+
+        existing_link = (
+            db.query(IncidentReportLink)
+            .filter(
+                IncidentReportLink.incident_id == inc.id,
+                IncidentReportLink.report_id == report.id,
+            )
+            .first()
+        )
+        existing_status = existing_link.status.value if existing_link else None
+
+        signals_for = [
+            MatchSignalSchema(
+                name=s.name, weight=s.weight, matched=s.matched, detail=s.detail
+            )
+            for s in eval_result.signals_for
+        ]
+        signals_against = [
+            MatchSignalSchema(
+                name=s.name, weight=s.weight, matched=s.matched, detail=s.detail
+            )
+            for s in eval_result.signals_against
+        ]
+
+        matches.append(
+            MatchCandidateResponse(
+                incident_id=inc.id,
+                incident_title=inc.title,
+                incident_category=inc.category,
+                incident_location=inc.location_name,
+                incident_created_at=inc.created_at,
+                band=eval_result.band.value,
+                score=score,
+                rationale=rationale,
+                signals_for=signals_for,
+                signals_against=signals_against,
+                unknowns=eval_result.unknowns,
+                is_same_origin=eval_result.is_same_origin,
+                origin_fingerprint=eval_result.origin_fingerprint,
+                existing_link_status=existing_status,
+            )
+        )
+
+    # Sort matches by band priority (strong > possible > weak) and score desc
+    band_order = {"strong": 3, "possible": 2, "weak": 1}
+    matches.sort(key=lambda m: (band_order.get(m.band, 0), m.score), reverse=True)
+
+    return ReportMatchesResponse(
+        report_id=report.id,
+        matches=matches,
+        origin_group_id=report.origin_group_id,
+        total_candidates=len(matches),
+    )

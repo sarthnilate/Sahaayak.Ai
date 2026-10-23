@@ -2,26 +2,32 @@ import React, { useState, useEffect } from 'react';
 import {
   Radio, Send, Upload, RefreshCw, Search, AlertCircle, CheckCircle,
   MapPin, Eye, Sparkles, X, Bot, AlertTriangle,
-  HelpCircle, UserCheck, User
+  HelpCircle, UserCheck, User, GitMerge
 } from 'lucide-react';
-import { Report, AiStatus } from '../../types';
+import { Report, AiStatus, MatchCandidate, ReportMatchesResponse } from '../../types';
 import {
   submitReport,
   retryReport,
   submitCoordinatorCorrection,
   getAiStatus,
-  getReportImageUrl
+  getReportImageUrl,
+  createIncidentFromReport,
+  getReportMatches,
+  confirmReportMatch,
+  rejectReportMatch
 } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { StatusBadge } from '../common/StatusBadge';
+import { MatchSuggestion } from '../common/MatchSuggestion';
 
 interface Props {
   reports: Report[];
   onRefresh: () => void;
   isLoading: boolean;
+  onNavigateToIncident?: (incidentId: string) => void;
 }
 
-export const ReportsView: React.FC<Props> = ({ reports, onRefresh, isLoading }) => {
+export const ReportsView: React.FC<Props> = ({ reports, onRefresh, isLoading, onNavigateToIncident }) => {
   const { hasRole } = useAuth();
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
 
@@ -53,6 +59,99 @@ export const ReportsView: React.FC<Props> = ({ reports, onRefresh, isLoading }) 
   const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false);
   const [correctionSuccess, setCorrectionSuccess] = useState<string | null>(null);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
+
+  // Promotion to incident state
+  const [showPromoteModal, setShowPromoteModal] = useState(false);
+  const [promoteTitle, setPromoteTitle] = useState('');
+  const [promoteCategory, setPromoteCategory] = useState('waterlogging');
+  const [promotePriority, setPromotePriority] = useState('medium');
+  const [promoteDistrict, setPromoteDistrict] = useState('Mumbai City');
+  const [isPromoting, setIsPromoting] = useState(false);
+  const [promoteSuccessId, setPromoteSuccessId] = useState<string | null>(null);
+  const [promoteError, setPromoteError] = useState<string | null>(null);
+
+  // Phase 5 Matches State
+  const [showMatchesModal, setShowMatchesModal] = useState(false);
+  const [matchesData, setMatchesData] = useState<ReportMatchesResponse | null>(null);
+  const [isLoadingMatches, setIsLoadingMatches] = useState(false);
+  const [matchesError, setMatchesError] = useState<string | null>(null);
+
+  const handleOpenMatches = async (report: Report) => {
+    setIsLoadingMatches(true);
+    setMatchesError(null);
+    setShowMatchesModal(true);
+    try {
+      const resp = await getReportMatches(report.id);
+      setMatchesData(resp);
+    } catch (err: any) {
+      setMatchesError(err.message || 'Failed to compute report duplicate matches');
+    } finally {
+      setIsLoadingMatches(false);
+    }
+  };
+
+  const handleConfirmMatchFromModal = async (incidentId: string, reportId: string, notes: string) => {
+    await confirmReportMatch(incidentId, reportId, notes);
+    if (selectedReport) {
+      const resp = await getReportMatches(selectedReport.id);
+      setMatchesData(resp);
+    }
+    onRefresh();
+  };
+
+  const handleRejectMatchFromModal = async (incidentId: string, reportId: string, notes: string) => {
+    await rejectReportMatch(incidentId, reportId, notes);
+    if (selectedReport) {
+      const resp = await getReportMatches(selectedReport.id);
+      setMatchesData(resp);
+    }
+    onRefresh();
+  };
+
+  const handleCreateNewIncidentFromModal = async (reportId: string, notes: string) => {
+    await createIncidentFromReport({
+      report_id: reportId,
+      district_source: 'coordinator_set'
+    });
+    setShowMatchesModal(false);
+    onRefresh();
+  };
+
+  const handleOpenPromote = (report: Report) => {
+    const ext = report.extracted_json || {};
+    const loc = ext.reported_location_text || report.location_claim || 'Mumbai Ward';
+    const summ = ext.short_summary || report.original_text.slice(0, 60);
+    setPromoteTitle(`Incident: ${loc} - ${ext.category || 'Hazard'}`);
+    setPromoteCategory(ext.category || 'waterlogging');
+    setPromotePriority(ext.claimed_severity === 'critical' ? 'critical' : ext.claimed_severity === 'high' ? 'high' : 'medium');
+    setPromoteDistrict(loc.toLowerCase().includes('suburban') || loc.toLowerCase().includes('bandra') || loc.toLowerCase().includes('andheri') ? 'Mumbai Suburban' : 'Mumbai City');
+    setPromoteSuccessId(null);
+    setPromoteError(null);
+    setShowPromoteModal(true);
+  };
+
+  const handleConfirmPromote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReport) return;
+    setIsPromoting(true);
+    setPromoteError(null);
+    try {
+      const inc = await createIncidentFromReport({
+        report_id: selectedReport.id,
+        title: promoteTitle,
+        category: promoteCategory,
+        suggested_priority: promotePriority,
+        district: promoteDistrict,
+        district_source: 'coordinator_set'
+      });
+      setPromoteSuccessId(inc.id);
+      onRefresh();
+    } catch (err: any) {
+      setPromoteError(err.message || 'Failed to promote report');
+    } finally {
+      setIsPromoting(false);
+    }
+  };
 
   useEffect(() => {
     getAiStatus()
@@ -1038,7 +1137,7 @@ export const ReportsView: React.FC<Props> = ({ reports, onRefresh, isLoading }) 
 
             {/* Modal Actions & Retry Button */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-[#282828]">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <button
                   type="button"
                   data-testid="retry-button"
@@ -1050,6 +1149,27 @@ export const ReportsView: React.FC<Props> = ({ reports, onRefresh, isLoading }) 
                   <RefreshCw className={`w-3.5 h-3.5 ${isRetrying ? 'animate-spin' : ''}`} />
                   <span>{isRetrying ? 'RE-EXTRACTING VIA AI...' : 'RETRY EXTRACTION'}</span>
                 </button>
+
+                {hasRole('coordinator', 'admin') && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenMatches(selectedReport)}
+                      className="px-4 py-2 rounded-lg text-xs font-mono font-bold bg-[#1A1A22] hover:bg-[#252533] text-amber-300 border border-amber-500/40 shadow flex items-center gap-1.5 transition-all"
+                    >
+                      <GitMerge className="w-3.5 h-3.5 text-amber-400" />
+                      <span>CHECK MATCHES</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenPromote(selectedReport)}
+                      className="px-4 py-2 rounded-lg text-xs font-mono font-bold bg-[#FF2DA8] hover:bg-[#E91E93] text-white shadow-[0_0_12px_rgba(255,45,168,0.25)] flex items-center gap-1.5 transition-all"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>PROMOTE TO INCIDENT</span>
+                    </button>
+                  </>
+                )}
 
                 {retryMessage && (
                   <span
@@ -1071,6 +1191,210 @@ export const ReportsView: React.FC<Props> = ({ reports, onRefresh, isLoading }) 
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Duplicate Matches Modal (Phase 5 Explainable Baseline) */}
+      {showMatchesModal && selectedReport && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="matches-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+        >
+          <div className="bg-[#121214] border border-amber-500/40 rounded-2xl w-full max-w-5xl my-8 max-h-[90vh] overflow-y-auto p-5 sm:p-7 shadow-[0_0_35px_rgba(245,185,66,0.15)] space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-amber-950/60 border border-amber-500/30">
+                  <GitMerge className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 id="matches-modal-title" className="text-base font-bold text-white font-mono">
+                    Duplicate Candidates for Report #{selectedReport.reference_code || selectedReport.id.slice(0, 8)}
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Deterministic cross-lingual signal evaluation without embeddings or probabilistic guesses.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowMatchesModal(false)}
+                className="p-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white"
+                aria-label="Close matches modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {isLoadingMatches && (
+              <div className="py-12 text-center text-xs font-mono text-zinc-400 flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                <span>Evaluating lexicon tokens, location bounds, and temporal windows...</span>
+              </div>
+            )}
+
+            {matchesError && (
+              <div className="p-4 rounded-xl bg-rose-950/50 border border-rose-500/40 text-xs font-mono text-rose-300">
+                {matchesError}
+              </div>
+            )}
+
+            {!isLoadingMatches && matchesData && matchesData.matches.length === 0 && (
+              <div className="p-8 text-center text-xs font-mono text-zinc-400 bg-zinc-950/50 border border-zinc-800 rounded-xl space-y-3">
+                <p>No active incidents matched this report's category or temporal window.</p>
+                <button
+                  onClick={() => {
+                    setShowMatchesModal(false);
+                    handleOpenPromote(selectedReport);
+                  }}
+                  className="px-4 py-2 rounded-lg text-xs font-bold font-mono bg-amber-600 hover:bg-amber-500 text-white"
+                >
+                  Create New Incident from this Report &rarr;
+                </button>
+              </div>
+            )}
+
+            {!isLoadingMatches && matchesData && matchesData.matches.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-xs font-mono text-zinc-400 pb-1">
+                  <span>Found {matchesData.total_candidates} candidate incident(s) ranked by band</span>
+                  {matchesData.origin_group_id && (
+                    <span className="text-purple-300">Origin Group: #{matchesData.origin_group_id.slice(0, 8)}</span>
+                  )}
+                </div>
+
+                {matchesData.matches.map((cand) => (
+                  <MatchSuggestion
+                    key={cand.incident_id}
+                    report={selectedReport}
+                    candidate={cand}
+                    onConfirm={handleConfirmMatchFromModal}
+                    onReject={handleRejectMatchFromModal}
+                    onCreateNewIncident={handleCreateNewIncidentFromModal}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Promote to Incident Modal */}
+      {showPromoteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#151515] border border-[#FF2DA8] rounded-2xl w-full max-w-md p-6 space-y-4 shadow-[0_0_35px_rgba(255,45,168,0.3)]">
+            <div className="flex items-center justify-between pb-2 border-b border-[#282828]">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-[#FF2DA8]" />
+                <h3 className="text-sm font-bold text-white font-mono uppercase">
+                  Promote Report #{selectedReport?.reference_code || selectedReport?.id.slice(0, 8)} to Incident
+                </h3>
+              </div>
+              <button onClick={() => setShowPromoteModal(false)} className="text-[#A7A7A7] hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {promoteSuccessId ? (
+              <div className="p-4 rounded-xl bg-[#10291F] border border-[#48C78E]/50 text-xs font-mono text-[#48C78E] space-y-3">
+                <p className="font-bold">✓ Incident Created Successfully!</p>
+                <p className="text-white text-[11px]">
+                  Assigned Incident ID: <strong className="text-[#D4FF3F]">{promoteSuccessId}</strong>
+                </p>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => {
+                      setShowPromoteModal(false);
+                      setSelectedReport(null);
+                      if (onNavigateToIncident) {
+                        onNavigateToIncident(promoteSuccessId);
+                      }
+                    }}
+                    className="px-4 py-2 rounded-lg text-xs font-mono font-bold bg-[#48C78E] text-black"
+                  >
+                    GO TO INCIDENTS
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleConfirmPromote} className="space-y-4">
+                {promoteError && (
+                  <div className="p-3 rounded-xl bg-[#351316] border border-[#FF5C68]/50 text-xs font-mono text-[#FF5C68]">
+                    {promoteError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-mono text-[#A7A7A7] mb-1">INCIDENT TITLE *</label>
+                  <input
+                    type="text"
+                    value={promoteTitle}
+                    onChange={(e) => setPromoteTitle(e.target.value)}
+                    required
+                    className="w-full bg-[#0B0B0B] border border-[#282828] focus:border-[#FF2DA8] rounded-xl p-2.5 text-xs text-white font-mono outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-mono text-[#A7A7A7] mb-1">CATEGORY</label>
+                    <select
+                      value={promoteCategory}
+                      onChange={(e) => setPromoteCategory(e.target.value)}
+                      className="w-full bg-[#0B0B0B] border border-[#282828] rounded-xl p-2 text-xs text-white font-mono"
+                    >
+                      <option value="waterlogging">Waterlogging</option>
+                      <option value="tree_fall">Tree Fall</option>
+                      <option value="landslide">Landslide</option>
+                      <option value="structural_damage">Structural Damage</option>
+                      <option value="power_outage">Power Outage</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-[#A7A7A7] mb-1">PRIORITY</label>
+                    <select
+                      value={promotePriority}
+                      onChange={(e) => setPromotePriority(e.target.value)}
+                      className="w-full bg-[#0B0B0B] border border-[#282828] rounded-xl p-2 text-xs text-white font-mono"
+                    >
+                      <option value="critical">Critical</option>
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-[#A7A7A7] mb-1">DISTRICT (ADMINISTRATIVE)</label>
+                  <input
+                    type="text"
+                    value={promoteDistrict}
+                    onChange={(e) => setPromoteDistrict(e.target.value)}
+                    className="w-full bg-[#0B0B0B] border border-[#282828] rounded-xl p-2 text-xs text-white font-mono"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPromoteModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-mono bg-[#222] text-[#A7A7A7]"
+                  >
+                    CANCEL
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPromoting}
+                    className="px-5 py-2 rounded-xl text-xs font-mono font-bold bg-[#FF2DA8] hover:bg-[#E91E93] text-white disabled:opacity-50"
+                  >
+                    {isPromoting ? 'PROMOTING...' : 'CONFIRM & PROMOTE'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

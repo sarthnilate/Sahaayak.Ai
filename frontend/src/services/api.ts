@@ -1,5 +1,6 @@
 import {
-  Report, Incident, IncidentReportLink, EvidenceItem, Task, AuditEvent, SystemHealth, User, PaginatedReports
+  Report, Incident, IncidentReportLink, EvidenceItem, Task, AuditEvent, SystemHealth, User, PaginatedReports,
+  PaginatedIncidents, TimelineEvent, ReportMatchesResponse, IncidentEvidenceListResponse
 } from '../types';
 
 const API_BASE = '/api/v1';
@@ -248,16 +249,46 @@ export async function getAiStatus(): Promise<{
 // Incidents & Evidence Services
 // ==============================================================================
 
-export async function listIncidents(category?: string, status?: string, priority?: string): Promise<Incident[]> {
-  const params = new URLSearchParams();
-  if (category) params.append('category', category);
-  if (status) params.append('status', status);
-  if (priority) params.append('priority', priority);
-  const res = await fetch(`${API_BASE}/incidents?${params.toString()}`, {
+export async function listIncidents(
+  filterOrCategory?: string | {
+    category?: string;
+    status?: string;
+    priority?: string;
+    district?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    sort_by?: string;
+    sort_desc?: boolean;
+  },
+  status?: string,
+  priority?: string
+): Promise<PaginatedIncidents> {
+  const urlParams = new URLSearchParams();
+  if (typeof filterOrCategory === 'object' && filterOrCategory !== null) {
+    if (filterOrCategory.category) urlParams.append('category', filterOrCategory.category);
+    if (filterOrCategory.status) urlParams.append('status', filterOrCategory.status);
+    if (filterOrCategory.priority) urlParams.append('priority', filterOrCategory.priority);
+    if (filterOrCategory.district) urlParams.append('district', filterOrCategory.district);
+    if (filterOrCategory.search) urlParams.append('search', filterOrCategory.search);
+    if (filterOrCategory.page) urlParams.append('page', String(filterOrCategory.page));
+    if (filterOrCategory.limit) urlParams.append('limit', String(filterOrCategory.limit));
+    if (filterOrCategory.sort_by) urlParams.append('sort_by', filterOrCategory.sort_by);
+    if (filterOrCategory.sort_desc !== undefined) urlParams.append('sort_desc', String(filterOrCategory.sort_desc));
+  } else {
+    if (filterOrCategory) urlParams.append('category', filterOrCategory);
+    if (status) urlParams.append('status', status);
+    if (priority) urlParams.append('priority', priority);
+  }
+  const res = await fetch(`${API_BASE}/incidents?${urlParams.toString()}`, {
     credentials: 'include',
     headers: getDefaultHeaders(false)
   });
-  return handleResponse<Incident[]>(res);
+  const data = await handleResponse<any>(res);
+  if (Array.isArray(data)) {
+    return { items: data, total: data.length, page: 1, limit: data.length, pages: 1 };
+  }
+  return data as PaginatedIncidents;
 }
 
 export async function getIncidentDetail(id: string): Promise<{
@@ -266,6 +297,7 @@ export async function getIncidentDetail(id: string): Promise<{
   evidence_items: EvidenceItem[];
   tasks: Task[];
   audit_events: AuditEvent[];
+  allowed_transitions?: string[];
 }> {
   const res = await fetch(`${API_BASE}/incidents/${id}`, {
     credentials: 'include',
@@ -274,13 +306,76 @@ export async function getIncidentDetail(id: string): Promise<{
   return handleResponse(res);
 }
 
+export async function getIncidentTimeline(id: string): Promise<TimelineEvent[]> {
+  const res = await fetch(`${API_BASE}/incidents/${id}/timeline`, {
+    credentials: 'include',
+    headers: getDefaultHeaders(false)
+  });
+  return handleResponse<TimelineEvent[]>(res);
+}
+
+export async function createIncident(payload: {
+  title: string;
+  summary: string;
+  category?: string;
+  suggested_priority?: string;
+  location_name: string;
+  district?: string;
+  state?: string;
+  district_source?: string;
+  state_source?: string;
+  latitude?: number;
+  longitude?: number;
+  location_precision?: string;
+  coordinate_source?: string;
+  has_grounded_coordinates?: boolean;
+}): Promise<Incident> {
+  const res = await fetch(`${API_BASE}/incidents`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: getDefaultHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  return handleResponse<Incident>(res);
+}
+
+export async function createIncidentFromReport(payload: {
+  report_id: string;
+  title?: string;
+  category?: string;
+  suggested_priority?: string;
+  location_name?: string;
+  district?: string;
+  state?: string;
+  district_source?: string;
+  state_source?: string;
+}): Promise<Incident> {
+  const res = await fetch(`${API_BASE}/incidents/from-report`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: getDefaultHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  return handleResponse<Incident>(res);
+}
+
 export async function updateIncident(id: string, payload: {
   title?: string;
   summary?: string;
   status?: string;
+  close_reason?: string;
   approved_priority?: string;
   priority_override_reason?: string;
   evidence_status?: string;
+  location_name?: string;
+  district?: string;
+  state?: string;
+  latitude?: number;
+  longitude?: number;
+  location_precision?: string;
+  coordinate_source?: string;
+  has_grounded_coordinates?: boolean;
+  version?: number;
 }): Promise<Incident> {
   const res = await fetch(`${API_BASE}/incidents/${id}`, {
     method: 'PATCH',
@@ -311,31 +406,74 @@ export async function rejectReportMatch(incidentId: string, reportId: string, no
   return handleResponse(res);
 }
 
+export async function getReportMatches(reportId: string): Promise<ReportMatchesResponse> {
+  const res = await fetch(`${API_BASE}/reports/${reportId}/matches`, {
+    credentials: 'include',
+    headers: getDefaultHeaders(false)
+  });
+  return handleResponse<ReportMatchesResponse>(res);
+}
+
+export async function getDuplicateSuggestions(): Promise<IncidentReportLink[]> {
+  const res = await fetch(`${API_BASE}/reports/duplicate-suggestions`, {
+    credentials: 'include',
+    headers: getDefaultHeaders(false)
+  });
+  return handleResponse<IncidentReportLink[]>(res);
+}
+
+export async function getIncidentEvidence(incidentId: string): Promise<IncidentEvidenceListResponse> {
+  const res = await fetch(`${API_BASE}/incidents/${incidentId}/evidence`, {
+    credentials: 'include',
+    headers: getDefaultHeaders(false)
+  });
+  return handleResponse<IncidentEvidenceListResponse>(res);
+}
+
 export async function addEvidence(incidentId: string, payload: {
-  source_type: string;
   source_name: string;
-  source_url?: string;
   claim_summary: string;
-  verification_status: string;
-  reviewer_notes?: string;
+  source_url?: string | null;
+  source_description?: string | null;
+  evidence_type?: string;
+  assessment?: string;
+  excerpt?: string | null;
+  reviewer_notes?: string | null;
 }): Promise<EvidenceItem> {
   const res = await fetch(`${API_BASE}/incidents/${incidentId}/evidence`, {
     method: 'POST',
     credentials: 'include',
     headers: getDefaultHeaders(true),
-    body: JSON.stringify({ ...payload, incident_id: incidentId, is_simulated: true })
+    body: JSON.stringify(payload)
   });
   return handleResponse<EvidenceItem>(res);
 }
 
-export async function reviewEvidence(evidenceId: string, verification_status: string, notes?: string): Promise<EvidenceItem> {
+export async function reviewEvidence(evidenceId: string, payload: {
+  reviewer_notes: string;
+  assessment?: string;
+  verification_status?: string;
+}): Promise<EvidenceItem> {
   const res = await fetch(`${API_BASE}/evidence/${evidenceId}/review`, {
     method: 'POST',
     credentials: 'include',
     headers: getDefaultHeaders(true),
-    body: JSON.stringify({ verification_status, reviewer_notes: notes })
+    body: JSON.stringify(payload)
   });
   return handleResponse<EvidenceItem>(res);
+}
+
+export async function overrideIncidentEvidenceStatus(incidentId: string, payload: {
+  status: string;
+  reviewer_notes: string;
+}): Promise<IncidentEvidenceListResponse> {
+  const res = await fetch(`${API_BASE}/incidents/${incidentId}/evidence-status`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: getDefaultHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  return handleResponse<IncidentEvidenceListResponse>(res);
 }
 
 export async function listTasks(status?: string, priority?: string, incidentId?: string): Promise<Task[]> {

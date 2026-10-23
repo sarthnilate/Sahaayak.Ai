@@ -29,20 +29,39 @@ class SahaayakException(Exception):
 
 
 class EntityNotFoundError(SahaayakException):
-    def __init__(self, entity_name: str, entity_id: str):
+    def __init__(
+        self,
+        entity_name: str = "Resource",
+        entity_id: str = "",
+        message: Optional[str] = None,
+        error_code: Optional[str] = None,
+        entity_type: Optional[str] = None,
+    ):
+        resolved_name = entity_type or entity_name
+        code = error_code or f"{resolved_name.upper()}_NOT_FOUND"
+        msg = message or f"{resolved_name} with identifier '{entity_id}' was not found."
         super().__init__(
-            code=f"{entity_name.upper()}_NOT_FOUND",
-            message=f"{entity_name} with identifier '{entity_id}' was not found.",
+            code=code,
+            message=msg,
             status_code=404,
         )
 
 
 class InvalidStateTransitionError(SahaayakException):
-    def __init__(self, entity: str, current_state: str, attempted_state: str):
+    def __init__(
+        self,
+        entity: str = "Resource",
+        current_state: str = "",
+        attempted_state: str = "",
+        message: Optional[str] = None,
+        error_code: Optional[str] = None,
+    ):
+        code = error_code or "INVALID_STATE_TRANSITION"
+        msg = message or f"Cannot transition {entity} from '{current_state}' to '{attempted_state}'."
         super().__init__(
-            code="INVALID_STATE_TRANSITION",
-            message=f"Cannot transition {entity} from '{current_state}' to '{attempted_state}'.",
-            status_code=409,
+            code=code,
+            message=msg,
+            status_code=400,
             details={"current_state": current_state, "attempted_state": attempted_state},
         )
 
@@ -243,12 +262,14 @@ def make_error_envelope(
     code: str, message: str, request_id: str, details: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     return {
+        "error_code": code,
+        "detail": message,
         "error": {
             "code": code,
             "message": message,
             "details": details or {},
             "request_id": request_id,
-        }
+        },
     }
 
 

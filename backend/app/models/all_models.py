@@ -1,7 +1,7 @@
 import enum
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.app.core.errors import AuditMutationForbiddenError
 from sqlalchemy import (
@@ -76,6 +76,7 @@ class PriorityEnum(str, enum.Enum):
 
 
 class EvidenceStatusEnum(str, enum.Enum):
+    UNASSESSED = "unassessed"
     UNVERIFIED = "unverified"
     PARTIALLY_CORROBORATED = "partially_corroborated"
     CONFLICTING = "conflicting"
@@ -83,6 +84,24 @@ class EvidenceStatusEnum(str, enum.Enum):
     CORROBORATING = "corroborating"
     CORROBORATED = "corroborated"
     DISPROVEN = "disproven"
+    CLOSED_AFTER_REVIEW = "closed_after_review"
+
+
+class AssessmentEnum(str, enum.Enum):
+    SUPPORTS = "supports"
+    CONTRADICTS = "contradicts"
+    NEUTRAL = "neutral"
+    CONTEXTUAL = "contextual"
+    UNASSESSED = "unassessed"
+
+
+class EvidenceTypeEnum(str, enum.Enum):
+    USER_CLAIM = "user_claim"
+    CORROBORATING_REPORT = "corroborating_report"
+    OFFICIAL_CONTEXT = "official_context"
+    CONTRADICTORY = "contradictory"
+    MANUAL_ATTACHMENT = "manual_attachment"
+    SYNTHETIC_TEST = "synthetic_test"
 
 
 class LinkStatusEnum(str, enum.Enum):
@@ -167,6 +186,9 @@ class Report(Base):
     corrected_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     corrected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    origin_group_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True, doc="Group ID for copied/forwarded claims sharing origin"
+    )
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=get_utc_now, nullable=False, index=True
     )
@@ -202,17 +224,47 @@ class Incident(Base):
     )
     priority_rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     priority_override_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Location fields
     location_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    location_description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    district: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    state: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    district_source: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, doc="reporter_stated | coordinator_set"
+    )
+    state_source: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, doc="reporter_stated | coordinator_set"
+    )
     latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     has_grounded_coordinates: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    location_precision: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, doc="exact | approximate | area_only"
+    )
+    coordinate_source: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, doc="coordinator_pinned | simulated_seed"
+    )
+
     evidence_status: Mapped[EvidenceStatusEnum] = mapped_column(
         SQLEnum(EvidenceStatusEnum),
         default=EvidenceStatusEnum.UNVERIFIED,
         nullable=False,
         index=True,
     )
+
+    # Coordinator assignment & close
+    assigned_coordinator_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    close_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_report_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+
     is_simulated: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Optimistic concurrency
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=get_utc_now, nullable=False, index=True
     )
@@ -249,7 +301,13 @@ class IncidentReportLink(Base):
         SQLEnum(LinkStatusEnum), default=LinkStatusEnum.SUGGESTED, nullable=False, index=True
     )
     similarity_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    match_band: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True, index=True, doc="strong | possible | weak"
+    )
+    signals_json: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, nullable=True)
     match_rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    review_input_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    reviewer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reviewed_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -275,9 +333,29 @@ class EvidenceItem(Base):
     report_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("reports.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    evidence_type: Mapped[str] = mapped_column(
+        String(50), default="user_claim", nullable=False, index=True
+    )
     source_type: Mapped[str] = mapped_column(String(50), default="field_report", nullable=False)
     source_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    source_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    source_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    source_timestamp: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    retrieved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=get_utc_now, nullable=False
+    )
+    freshness: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    assessment: Mapped[str] = mapped_column(
+        String(50), default="unassessed", nullable=False, index=True
+    )
+    excerpt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    reviewer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    independence_group: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, index=True
+    )
     is_simulated: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     claim_summary: Mapped[str] = mapped_column(Text, nullable=False)
     verification_status: Mapped[EvidenceStatusEnum] = mapped_column(
@@ -286,12 +364,17 @@ class EvidenceItem(Base):
         nullable=False,
         index=True,
     )
-    reviewer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    reviewed_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=get_utc_now, nullable=False, index=True
     )
 
     incident = relationship("Incident", back_populates="evidence_items")
+    report = relationship("Report", foreign_keys=[report_id])
 
 
 class Task(Base):

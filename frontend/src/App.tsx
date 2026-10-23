@@ -39,13 +39,14 @@ function AuthenticatedApp() {
       ]);
 
       setHealth(h);
-      setIncidents(incList as Incident[]);
+      const incItems = Array.isArray(incList) ? incList : (incList as any)?.items || [];
+      setIncidents(incItems as Incident[]);
       const reportItems = Array.isArray(repList) ? repList : (repList as any).items || [];
       setReports(reportItems);
       setTasks(taskList as Task[]);
 
       // If database is empty and user is admin/coordinator, automatically seed
-      if (hasRole('coordinator', 'admin') && (incList as Incident[]).length === 0 && reportItems.length === 0) {
+      if (hasRole('coordinator', 'admin') && incItems.length === 0 && reportItems.length === 0) {
         await handleSeedDemo();
       }
     } catch (err: any) {
@@ -64,12 +65,13 @@ function AuthenticatedApp() {
         listReports(),
         listTasks()
       ]);
-      setIncidents(incList);
+      const incItems = Array.isArray(incList) ? incList : (incList as any)?.items || [];
+      setIncidents(incItems);
       const reportItems = Array.isArray(repList) ? repList : (repList as any).items || [];
       setReports(reportItems);
       setTasks(taskList);
-      if (incList.length > 0 && !selectedIncidentId) {
-        setSelectedIncidentId(incList[0].id);
+      if (incItems.length > 0 && !selectedIncidentId) {
+        setSelectedIncidentId(incItems[0].id);
       }
     } catch (err: any) {
       setErrorMessage('Failed to seed demo data: ' + err.message);
@@ -137,6 +139,7 @@ function AuthenticatedApp() {
             reports={reports}
             onRefresh={loadData}
             isLoading={isLoading}
+            onNavigateToIncident={(id) => handleNavigate('incidents', id)}
           />
         )}
 
@@ -146,6 +149,7 @@ function AuthenticatedApp() {
             selectedIncidentId={selectedIncidentId}
             onRefresh={loadData}
             isLoading={isLoading}
+            onNavigateToReport={(id) => handleNavigate('reports', id)}
           />
         )}
 

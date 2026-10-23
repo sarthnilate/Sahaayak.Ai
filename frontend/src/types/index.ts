@@ -121,13 +121,73 @@ export interface Incident {
   priority_rationale?: string | null;
   priority_override_reason?: string | null;
   location_name: string;
+  district?: string | null;
+  state?: string | null;
+  district_source?: 'reporter_stated' | 'coordinator_set' | null;
+  state_source?: 'reporter_stated' | 'coordinator_set' | null;
   latitude?: number | null;
   longitude?: number | null;
+  location_precision?: string | null;
+  coordinate_source?: 'coordinator_pinned' | 'simulated_seed' | null;
   has_grounded_coordinates: boolean;
   evidence_status: 'unverified' | 'partially_corroborated' | 'conflicting_evidence' | 'corroborated';
+  assigned_coordinator_id?: string | null;
+  close_reason?: string | null;
+  source_report_id?: string | null;
+  version: number;
   is_simulated: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface PaginatedIncidents {
+  items: Incident[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+export interface TimelineEvent {
+  id: string;
+  event_type: 'audit' | 'report' | 'note' | 'task';
+  action: string;
+  actor: string;
+  summary: string;
+  details?: Record<string, any> | null;
+  timestamp: string;
+  related_id?: string | null;
+}
+
+export interface MatchSignal {
+  name: string;
+  weight: number;
+  matched: boolean;
+  detail: string;
+}
+
+export interface MatchCandidate {
+  incident_id: string;
+  incident_title: string;
+  incident_category: string;
+  incident_location: string;
+  incident_created_at: string;
+  band: 'strong' | 'possible' | 'weak';
+  score: number;
+  rationale: string;
+  signals_for: MatchSignal[];
+  signals_against: MatchSignal[];
+  unknowns: string[];
+  is_same_origin: boolean;
+  origin_fingerprint?: string | null;
+  existing_link_status?: 'suggested' | 'confirmed' | 'rejected' | null;
+}
+
+export interface ReportMatchesResponse {
+  report_id: string;
+  matches: MatchCandidate[];
+  origin_group_id?: string | null;
+  total_candidates: number;
 }
 
 export interface IncidentReportLink {
@@ -136,24 +196,73 @@ export interface IncidentReportLink {
   report_id: string;
   status: 'suggested' | 'confirmed' | 'rejected';
   similarity_score: number;
+  match_band?: 'strong' | 'possible' | 'weak' | null;
   match_rationale?: string | null;
+  signals_json?: {
+    signals_for?: MatchSignal[];
+    signals_against?: MatchSignal[];
+    unknowns?: string[];
+    is_same_origin?: boolean;
+    origin_fingerprint?: string | null;
+  } | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
+  reviewer_notes?: string | null;
   report?: Report;
+  incident?: Incident;
 }
+
+export type EvidenceType = 'user_claim' | 'corroborating_report' | 'official_context' | 'contradictory' | 'manual_attachment' | 'synthetic_test';
+export type EvidenceAssessment = 'supports' | 'contradicts' | 'neutral' | 'contextual' | 'unassessed';
+export type EvidenceFreshness = 'fresh' | 'recent' | 'stale' | 'unknown';
+export type EvidenceStatus = 'unassessed' | 'unverified' | 'partially_corroborated' | 'conflicting_evidence' | 'corroborated' | 'closed_after_review';
 
 export interface EvidenceItem {
   id: string;
   incident_id: string;
   report_id?: string | null;
-  source_type: string;
+  // Phase 6 fields
+  evidence_type: EvidenceType;
+  source_description?: string | null;
   source_name: string;
   source_url?: string | null;
+  source_timestamp?: string | null;
+  retrieved_at?: string | null;
+  freshness: EvidenceFreshness;
+  assessment: EvidenceAssessment;
+  excerpt?: string | null;
+  independence_group?: string | null;
   is_simulated: boolean;
   claim_summary: string;
-  verification_status: 'corroborating' | 'conflicting' | 'unverified' | 'disproven';
+  verification_status: EvidenceStatus;
   reviewer_notes?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface MissingEvidenceGap {
+  gap_type: string;
+  description: string;
+  severity: 'high' | 'medium' | 'low';
+}
+
+export interface VerificationState {
+  verification_available: boolean;
+  reason: string;
+  provider_name?: string | null;
+}
+
+export interface IncidentEvidenceListResponse {
+  incident_id: string;
+  evidence_status: EvidenceStatus;
+  suggested_status: EvidenceStatus;
+  independent_source_count: number;
+  conflicts_count: number;
+  items: EvidenceItem[];
+  missing_evidence: MissingEvidenceGap[];
+  verification: VerificationState;
 }
 
 export interface Task {
@@ -176,7 +285,8 @@ export interface AuditEvent {
   action: string;
   entity_type: string;
   entity_id: string;
-  details?: Record<string, any> | null;
+  before_state?: Record<string, any> | null;
+  after_state?: Record<string, any> | null;
   timestamp: string;
 }
 

@@ -18,10 +18,18 @@ def test_seed_demo_data():
     assert data["incidents_count"] == 2
     assert data["reports_count"] == 6
 
+def _coord_client():
+    r = client.post("/api/v1/auth/login", json={"email": "coordinator@sahaayak.ai", "password": "CoordPass@2026"})
+    c = TestClient(app, cookies=dict(r.cookies))
+    c.headers["X-CSRF-Token"] = r.json()["csrf_token"]
+    return c
+
+
 def test_list_incidents():
     response = client.get("/api/v1/incidents")
     assert response.status_code == 200
-    incidents = response.json()
+    data = response.json()
+    incidents = data.get("items", data)
     assert len(incidents) >= 2
     assert any(inc["category"] == "waterlogging" for inc in incidents)
 
@@ -52,7 +60,8 @@ def test_report_submission_text():
 
 def test_match_confirm():
     # Confirm suggested link from seed data
-    response = client.post(
+    c = _coord_client()
+    response = c.post(
         "/api/v1/incidents/inc-hindmata-001/reports/rep-hindmata-mr/confirm",
         json={"reviewer_notes": "Confirmed Marathi commuter report"}
     )
@@ -61,10 +70,11 @@ def test_match_confirm():
 
 def test_task_approve_and_update():
     # Approve task3
-    tasks = client.get("/api/v1/tasks?incident_id=inc-hindmata-001").json()
+    c = _coord_client()
+    tasks = c.get("/api/v1/tasks?incident_id=inc-hindmata-001").json()
     suggested_task = next((t for t in tasks if t["status"] == "suggested"), None)
     if suggested_task:
-        resp = client.post(
+        resp = c.post(
             f"/api/v1/tasks/{suggested_task['id']}/approve",
             json={"approved_by": "coordinator@sahaayak.ai", "assigned_to": "Ward Squad"}
         )
@@ -72,15 +82,16 @@ def test_task_approve_and_update():
         assert resp.json()["status"] == "pending"
 
 def test_priority_override():
+    c = _coord_client()
     # Overriding priority without reason should fail (400)
-    resp = client.patch(
+    resp = c.patch(
         "/api/v1/incidents/inc-hindmata-001",
         json={"approved_priority": "low"}
     )
     assert resp.status_code == 400
 
     # Overriding priority with reason succeeds
-    resp2 = client.patch(
+    resp2 = c.patch(
         "/api/v1/incidents/inc-hindmata-001",
         json={"approved_priority": "high", "priority_override_reason": "Drainage clearing progressed faster than expected"}
     )

@@ -119,26 +119,49 @@ class PaginatedReportsResponse(BaseModel):
 
 # Incident Schemas
 class IncidentCreate(BaseModel):
-    title: str = Field(..., min_length=3)
+    title: str = Field(..., min_length=3, max_length=255)
     summary: str = Field(..., min_length=5)
     category: str = "waterlogging"
     suggested_priority: str = "medium"
     approved_priority: Optional[str] = "medium"
     priority_rationale: Optional[str] = None
-    location_name: str
+    location_name: str = Field(..., min_length=1, max_length=255)
+    location_description: Optional[str] = Field(None, max_length=500)
+    district: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    district_source: Optional[str] = Field(None, pattern=r"^(reporter_stated|coordinator_set)$")
+    state_source: Optional[str] = Field(None, pattern=r"^(reporter_stated|coordinator_set)$")
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    location_precision: Optional[str] = Field(None, pattern=r"^(exact|approximate|area_only)$")
+    coordinate_source: Optional[str] = Field(None, pattern=r"^(coordinator_pinned|simulated_seed)$")
     has_grounded_coordinates: bool = False
     is_simulated: bool = True
+    source_report_id: Optional[str] = None
 
 
 class IncidentUpdate(BaseModel):
-    title: Optional[str] = None
-    summary: Optional[str] = None
+    title: Optional[str] = Field(None, min_length=3, max_length=255)
+    summary: Optional[str] = Field(None, min_length=5)
     status: Optional[str] = None
+    close_reason: Optional[str] = None
     approved_priority: Optional[str] = None
     priority_override_reason: Optional[str] = None
     evidence_status: Optional[str] = None
+    location_name: Optional[str] = None
+    location_description: Optional[str] = None
+    district: Optional[str] = None
+    state: Optional[str] = None
+    district_source: Optional[str] = Field(None, pattern=r"^(reporter_stated|coordinator_set)$")
+    state_source: Optional[str] = Field(None, pattern=r"^(reporter_stated|coordinator_set)$")
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_precision: Optional[str] = Field(None, pattern=r"^(exact|approximate|area_only)$")
+    coordinate_source: Optional[str] = Field(None, pattern=r"^(coordinator_pinned|simulated_seed)$")
+    has_grounded_coordinates: Optional[bool] = None
+    assigned_coordinator_id: Optional[str] = None
+    category: Optional[str] = None
+    version: Optional[int] = Field(None, description="Required for optimistic concurrency check")
 
 
 class IncidentResponse(BaseModel):
@@ -152,11 +175,22 @@ class IncidentResponse(BaseModel):
     priority_rationale: Optional[str] = None
     priority_override_reason: Optional[str] = None
     location_name: str
+    location_description: Optional[str] = None
+    district: Optional[str] = None
+    state: Optional[str] = None
+    district_source: Optional[str] = None
+    state_source: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     has_grounded_coordinates: bool
+    location_precision: Optional[str] = None
+    coordinate_source: Optional[str] = None
     evidence_status: str
+    assigned_coordinator_id: Optional[str] = None
+    close_reason: Optional[str] = None
+    source_report_id: Optional[str] = None
     is_simulated: bool
+    version: int = 1
     created_at: datetime
     updated_at: datetime
 
@@ -164,18 +198,83 @@ class IncidentResponse(BaseModel):
         from_attributes = True
 
 
+class PaginatedIncidentsResponse(BaseModel):
+    items: List[IncidentResponse]
+    total: int
+    page: int
+    limit: int
+    pages: int
+
+
+class IncidentCreateFromReport(BaseModel):
+    report_id: str
+    title: str = Field(..., min_length=3, max_length=255)
+    category: Optional[str] = None
+    suggested_priority: Optional[str] = "medium"
+    location_name: Optional[str] = None
+    district: Optional[str] = None
+    state: Optional[str] = None
+    district_source: Optional[str] = None
+    state_source: Optional[str] = None
+
+
+class TimelineEvent(BaseModel):
+    id: str
+    event_type: str  # audit | evidence | link | task
+    action: str
+    actor: Optional[str] = None
+    summary: str
+    details: Optional[Dict[str, Any]] = None
+    timestamp: datetime
+
+
 # Incident Report Link Schemas
+class MatchSignalSchema(BaseModel):
+    name: str
+    weight: float
+    matched: bool
+    detail: str
+
+
+class MatchCandidateResponse(BaseModel):
+    incident_id: str
+    incident_title: str
+    incident_category: str
+    incident_location: str
+    incident_created_at: datetime
+    band: str  # strong | possible | weak
+    score: float
+    rationale: str
+    signals_for: List[MatchSignalSchema] = []
+    signals_against: List[MatchSignalSchema] = []
+    unknowns: List[str] = []
+    is_same_origin: bool = False
+    origin_fingerprint: Optional[str] = None
+    existing_link_status: Optional[str] = None
+
+
+class ReportMatchesResponse(BaseModel):
+    report_id: str
+    matches: List[MatchCandidateResponse]
+    origin_group_id: Optional[str] = None
+    total_candidates: int
+
+
 class IncidentReportLinkResponse(BaseModel):
     id: str
     incident_id: str
     report_id: str
     status: str
     similarity_score: float
+    match_band: Optional[str] = None
+    signals_json: Optional[List[Dict[str, Any]]] = None
     match_rationale: Optional[str] = None
+    reviewer_notes: Optional[str] = None
     reviewed_by: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     created_at: datetime
     report: Optional[ReportResponse] = None
+    incident: Optional[IncidentResponse] = None
 
     class Config:
         from_attributes = True
@@ -189,32 +288,91 @@ class LinkReviewRequest(BaseModel):
 
 # Evidence Schemas
 class EvidenceCreate(BaseModel):
-    incident_id: str
+    incident_id: Optional[str] = None
     report_id: Optional[str] = None
+    evidence_type: str = "manual_attachment"
     source_type: str = "field_report"
-    source_name: str
+    source_name: str = Field(..., min_length=2)
+    source_description: Optional[str] = None
     source_url: Optional[str] = None
-    is_simulated: bool = True
-    claim_summary: str
-    verification_status: str = "unverified"
+    source_timestamp: Optional[datetime] = None
+    freshness: Optional[str] = None
+    assessment: str = "supports"  # supports | contradicts | neutral | contextual | unassessed
+    excerpt: Optional[str] = None
+    metadata_json: Optional[Dict[str, Any]] = None
     reviewer_notes: Optional[str] = None
+    independence_group: Optional[str] = None
+    is_simulated: bool = False
+    claim_summary: Optional[str] = None
+    verification_status: Optional[str] = "unverified"
+
+
+class EvidenceReviewRequest(BaseModel):
+    assessment: Optional[str] = None
+    verification_status: Optional[str] = None
+    reviewer_notes: str = Field(..., min_length=1, description="Required coordinator review notes")
+
+
+class IncidentEvidenceStatusOverrideRequest(BaseModel):
+    status: str
+    reviewer_notes: str = Field(..., min_length=1, description="Required coordinator review notes")
 
 
 class EvidenceResponse(BaseModel):
     id: str
     incident_id: str
     report_id: Optional[str] = None
+    evidence_type: str = "user_claim"
     source_type: str
     source_name: str
+    source_description: Optional[str] = None
     source_url: Optional[str] = None
+    source_timestamp: Optional[datetime] = None
+    retrieved_at: Optional[datetime] = None
+    freshness: Optional[str] = None
+    assessment: str = "unassessed"
+    excerpt: Optional[str] = None
+    metadata_json: Optional[Dict[str, Any]] = None
+    reviewer_notes: Optional[str] = None
+    independence_group: Optional[str] = None
     is_simulated: bool
     claim_summary: str
     verification_status: str
-    reviewer_notes: Optional[str] = None
+    created_by: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class MissingEvidenceGap(BaseModel):
+    gap_type: str
+    description: str
+    severity: str  # high | medium | low
+
+
+class VerificationState(BaseModel):
+    verification_available: bool
+    reason: str
+    provider_name: Optional[str] = None
+
+
+class IncidentEvidenceListResponse(BaseModel):
+    incident_id: str
+    items: List[EvidenceResponse]
+    evidence_status: str
+    suggested_status: str
+    independent_source_count: int
+    conflicts_count: int
+    missing_evidence: List[MissingEvidenceGap]
+    verification: VerificationState
+    # Compatibility aliases
+    evidence_items: Optional[List[EvidenceResponse]] = None
+    independence_count: Optional[int] = None
+    verification_available: Optional[bool] = None
+    verification_unavailable_reason: Optional[str] = None
 
 
 # Task Schemas
