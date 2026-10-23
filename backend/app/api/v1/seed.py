@@ -1,13 +1,19 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
 from backend.app.models.all_models import (
-    Report, Incident, IncidentReportLink, EvidenceItem, Task, AuditEvent
+    AuditEvent,
+    EvidenceItem,
+    Incident,
+    IncidentReportLink,
+    Report,
+    Task,
 )
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
 router = APIRouter()
+
 
 @router.post("/seed")
 def seed_demo_data(db: Session = Depends(get_db)):
@@ -16,16 +22,63 @@ def seed_demo_data(db: Session = Depends(get_db)):
     strictly adhering to MASTER_PROMPT_ANTIGRAVITY.md specifications.
     All records are clearly flagged as simulated.
     """
-    # Clear existing data
-    db.query(AuditEvent).delete()
+    import os
+
+    from backend.app.core.auth import hash_password
+    from backend.app.models.all_models import RoleEnum, User
+    from sqlalchemy import text
+
+    # Clear existing demo records
+    db.execute(text("DELETE FROM audit_events;"))
     db.query(Task).delete()
     db.query(EvidenceItem).delete()
     db.query(IncidentReportLink).delete()
     db.query(Report).delete()
     db.query(Incident).delete()
+    db.query(User).delete()
     db.commit()
 
     now = datetime.utcnow()
+
+    # 0. Seed Demo Accounts (Passwords from environment, with secure demo fallbacks)
+    admin_pwd = os.getenv("ADMIN_PASSWORD", "AdminPass@2026")
+    coord_pwd = os.getenv("COORDINATOR_PASSWORD", "CoordPass@2026")
+    reporter_pwd = os.getenv("REPORTER_PASSWORD", "ReporterPass@2026")
+
+    admin_user = User(
+        id="usr-admin-001",
+        username="admin",
+        email="admin@sahaayak.ai",
+        hashed_password=hash_password(admin_pwd),
+        role=RoleEnum.ADMIN,
+        full_name="Chief Municipal Officer (Admin)",
+        failed_login_attempts=0,
+        locked_until=None,
+    )
+    coord_user = User(
+        id="usr-coord-001",
+        username="coordinator",
+        email="coordinator@sahaayak.ai",
+        hashed_password=hash_password(coord_pwd),
+        role=RoleEnum.COORDINATOR,
+        full_name="Emergency Response Coordinator",
+        failed_login_attempts=0,
+        locked_until=None,
+    )
+    reporter_user = User(
+        id="usr-reporter-001",
+        username="reporter",
+        email="reporter@sahaayak.ai",
+        hashed_password=hash_password(reporter_pwd),
+        role=RoleEnum.REPORTER,
+        full_name="Verified Citizen Reporter",
+        failed_login_attempts=0,
+        locked_until=None,
+    )
+    db.add(admin_user)
+    db.add(coord_user)
+    db.add(reporter_user)
+    db.commit()
 
     # 1. Main Incident: Hindmata Waterlogging (Simulated)
     inc_waterlogging = Incident(
@@ -44,7 +97,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         evidence_status="partially_corroborated",
         is_simulated=True,
         created_at=now - timedelta(hours=3),
-        updated_at=now - timedelta(hours=1)
+        updated_at=now - timedelta(hours=1),
     )
 
     # 2. Unrelated Incident: WEH Fallen Tree (Simulated)
@@ -64,7 +117,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         evidence_status="unverified",
         is_simulated=True,
         created_at=now - timedelta(hours=2),
-        updated_at=now - timedelta(hours=2)
+        updated_at=now - timedelta(hours=2),
     )
 
     db.add(inc_waterlogging)
@@ -72,9 +125,12 @@ def seed_demo_data(db: Session = Depends(get_db)):
     db.commit()
 
     # 3. Reports
-    # Report 1 (English): Hindmata bus passenger
+    # Report 1 (English): Hindmata bus passenger (Citizen report)
     rep1 = Report(
         id="rep-hindmata-en",
+        reference_code="SAH-2026-HIND01",
+        user_id=None,
+        source_fingerprint="fp-hindmata-en-001",
         original_text="Water is above knee level near Hindmata cinema flyover underpass. Buses are completely stuck and water is rising fast. Need help urgently!",
         media_path=None,
         media_type=None,
@@ -85,8 +141,38 @@ def seed_demo_data(db: Session = Depends(get_db)):
         coordinates_lat=19.0180,
         coordinates_lng=72.8480,
         processing_status="processed",
-        extraction_source="demo",
+        extraction_source="deterministic-demo",
+        extraction_metadata={
+            "provider": "deterministic-demo",
+            "mode": "demo",
+            "model": "demo-script-v1",
+            "latency_ms": 12,
+            "attempt_count": 1,
+            "schema_version": "1.0.0",
+            "simulated": True,
+            "processed_at": (now - timedelta(hours=2, minutes=49)).isoformat(),
+        },
         extracted_json={
+            "category": "waterlogging",
+            "short_summary": "Critical waterlogging knee-deep near Hindmata cinema stalling transit buses.",
+            "original_text_language": "en",
+            "reported_location_text": "Hindmata Cinema Underpass, Dadar",
+            "location_precision": "landmark",
+            "location_source": "text",
+            "incident_time": None,
+            "claimed_severity": "critical",
+            "safety_concern": True,
+            "safety_concern_reason": "Rapidly rising water submerging transit buses with stranded commuters.",
+            "people_or_infrastructure_affected": ["Dadar Roadway", "Bus Route 27"],
+            "source_attribution": "commuter",
+            "is_forwarded_message": False,
+            "explicit_facts": ["Water is above knee level", "Hindmata cinema flyover underpass inundated", "Buses completely stuck"],
+            "model_inferences": ["Water depth approx 85cm", "Transit corridor disabled"],
+            "missing_information": ["Stranded passenger count", "Operating pump status"],
+            "ambiguities": [],
+            "contradictions": [],
+            "follow_up_questions": ["Are municipal dewatering pumps active at the junction?", "Are passengers stranded inside buses?"],
+            # Legacy aliases
             "hazard_type": "waterlogging",
             "severity": "critical",
             "water_depth_cm": 85,
@@ -100,15 +186,18 @@ def seed_demo_data(db: Session = Depends(get_db)):
             "confidence_score": 0.95,
             "sentiment_urgency": "critical",
             "language_detected": "en",
-            "summary": "Critical waterlogging knee-deep near Hindmata cinema stalling transit buses."
+            "summary": "Critical waterlogging knee-deep near Hindmata cinema stalling transit buses.",
         },
         submitted_at=now - timedelta(hours=2, minutes=50),
-        processed_at=now - timedelta(hours=2, minutes=49)
+        processed_at=now - timedelta(hours=2, minutes=49),
     )
 
     # Report 2 (Hindi): Shopkeeper near Dadar TT
     rep2 = Report(
         id="rep-hindmata-hi",
+        reference_code="SAH-2026-HIND02",
+        user_id="usr-reporter-001",
+        source_fingerprint="fp-hindmata-hi-002",
         original_text="दादर टीटी सर्कल और हिंदमाता के पास 3 फीट पानी भर गया है, दुकानें और गाड़ियां डूब रही हैं। लोग फंसे हैं। मदद चाहिए।",
         media_path=None,
         media_type=None,
@@ -119,8 +208,38 @@ def seed_demo_data(db: Session = Depends(get_db)):
         coordinates_lat=19.0175,
         coordinates_lng=72.8475,
         processing_status="processed",
-        extraction_source="demo",
+        extraction_source="deterministic-demo",
+        extraction_metadata={
+            "provider": "deterministic-demo",
+            "mode": "demo",
+            "model": "demo-script-v1",
+            "latency_ms": 14,
+            "attempt_count": 1,
+            "schema_version": "1.0.0",
+            "simulated": True,
+            "processed_at": (now - timedelta(hours=2, minutes=29)).isoformat(),
+        },
         extracted_json={
+            "category": "waterlogging",
+            "short_summary": "Hindmata and Dadar TT Circle inundated with ~3 feet water, submerging vehicles and trapping residents.",
+            "original_text_language": "hi",
+            "reported_location_text": "Dadar TT Circle / Hindmata",
+            "location_precision": "landmark",
+            "location_source": "text",
+            "incident_time": None,
+            "claimed_severity": "critical",
+            "safety_concern": True,
+            "safety_concern_reason": "Trapped civilians and submerging commercial vehicles in ~3ft deep water.",
+            "people_or_infrastructure_affected": ["Commercial retail shops", "Dadar TT Intersection"],
+            "source_attribution": "local shopkeeper",
+            "is_forwarded_message": False,
+            "explicit_facts": ["3 feet water accumulated", "Dadar TT Circle and Hindmata inundated", "Shops and vehicles submerging", "People trapped"],
+            "model_inferences": ["Severe localized flash water accumulation requiring high-capacity pumps"],
+            "missing_information": ["Number of trapped residents", "Power grid status in commercial row"],
+            "ambiguities": [],
+            "contradictions": [],
+            "follow_up_questions": ["Has local electricity been isolated in the flooded shops?", "Are elderly or disabled people trapped?"],
+            # Legacy aliases
             "hazard_type": "waterlogging",
             "severity": "critical",
             "water_depth_cm": 90,
@@ -134,15 +253,18 @@ def seed_demo_data(db: Session = Depends(get_db)):
             "confidence_score": 0.94,
             "sentiment_urgency": "critical",
             "language_detected": "hi",
-            "summary": "Hindmata and Dadar TT Circle inundated with ~3 feet water, submerging vehicles and trapping residents."
+            "summary": "Hindmata and Dadar TT Circle inundated with ~3 feet water, submerging vehicles and trapping residents.",
         },
         submitted_at=now - timedelta(hours=2, minutes=30),
-        processed_at=now - timedelta(hours=2, minutes=29)
+        processed_at=now - timedelta(hours=2, minutes=29),
     )
 
     # Report 3 (Marathi): Local commuter
     rep3 = Report(
         id="rep-hindmata-mr",
+        reference_code="SAH-2026-HIND03",
+        user_id="usr-reporter-001",
+        source_fingerprint="fp-hindmata-mr-003",
         original_text="हिंदमाता फ्लायओव्हरखाली पाणी साचल्यामुळे वाहतूक ठप्प झाली आहे. बेस्ट बसेस मार्ग बदलण्यात आले आहेत. तातडीने पाण्याचा उपसा आवश्यक आहे.",
         media_path=None,
         media_type=None,
@@ -153,8 +275,38 @@ def seed_demo_data(db: Session = Depends(get_db)):
         coordinates_lat=19.0179,
         coordinates_lng=72.8477,
         processing_status="processed",
-        extraction_source="demo",
+        extraction_source="deterministic-demo",
+        extraction_metadata={
+            "provider": "deterministic-demo",
+            "mode": "demo",
+            "model": "demo-script-v1",
+            "latency_ms": 11,
+            "attempt_count": 1,
+            "schema_version": "1.0.0",
+            "simulated": True,
+            "processed_at": (now - timedelta(hours=2, minutes=9)).isoformat(),
+        },
         extracted_json={
+            "category": "waterlogging",
+            "short_summary": "Hindmata flyover underpass waterlogged, halting traffic and forcing BEST bus diversions.",
+            "original_text_language": "mr",
+            "reported_location_text": "Hindmata Flyover, Dadar",
+            "location_precision": "landmark",
+            "location_source": "text",
+            "incident_time": None,
+            "claimed_severity": "high",
+            "safety_concern": False,
+            "safety_concern_reason": None,
+            "people_or_infrastructure_affected": ["BEST Bus Routes", "Local traffic flow"],
+            "source_attribution": "commuter",
+            "is_forwarded_message": False,
+            "explicit_facts": ["Traffic stopped under Hindmata flyover", "BEST bus routes diverted", "Water accumulation requiring immediate drainage"],
+            "model_inferences": ["Water depth approx 80cm"],
+            "missing_information": ["Status of dewatering operations"],
+            "ambiguities": [],
+            "contradictions": [],
+            "follow_up_questions": ["Is upper deck flyover traffic flowing normally?"],
+            # Legacy aliases
             "hazard_type": "waterlogging",
             "severity": "high",
             "water_depth_cm": 80,
@@ -168,15 +320,18 @@ def seed_demo_data(db: Session = Depends(get_db)):
             "confidence_score": 0.96,
             "sentiment_urgency": "urgent",
             "language_detected": "mr",
-            "summary": "Hindmata flyover underpass waterlogged, halting traffic and forcing BEST bus diversions."
+            "summary": "Hindmata flyover underpass waterlogged, halting traffic and forcing BEST bus diversions.",
         },
         submitted_at=now - timedelta(hours=2, minutes=10),
-        processed_at=now - timedelta(hours=2, minutes=9)
+        processed_at=now - timedelta(hours=2, minutes=9),
     )
 
     # Report 4 (Unrelated): Bandra tree fall
     rep4 = Report(
         id="rep-bandra-tree",
+        reference_code="SAH-2026-TREE04",
+        user_id="usr-reporter-001",
+        source_fingerprint="fp-bandra-tree-004",
         original_text="Huge tree has crashed on Western Express Highway right before Bandra flyover north side. Two lanes totally blocked, bumper-to-bumper traffic.",
         media_path=None,
         media_type=None,
@@ -186,8 +341,38 @@ def seed_demo_data(db: Session = Depends(get_db)):
         coordinates_lat=19.0596,
         coordinates_lng=72.8450,
         processing_status="processed",
-        extraction_source="demo",
+        extraction_source="deterministic-demo",
+        extraction_metadata={
+            "provider": "deterministic-demo",
+            "mode": "demo",
+            "model": "demo-script-v1",
+            "latency_ms": 13,
+            "attempt_count": 1,
+            "schema_version": "1.0.0",
+            "simulated": True,
+            "processed_at": (now - timedelta(hours=1, minutes=44)).isoformat(),
+        },
         extracted_json={
+            "category": "tree_fall",
+            "short_summary": "Large banyan tree fallen across two lanes of WEH near Bandra causing extensive highway congestion.",
+            "original_text_language": "en",
+            "reported_location_text": "Western Express Highway near Bandra Flyover",
+            "location_precision": "landmark",
+            "location_source": "text",
+            "incident_time": None,
+            "claimed_severity": "high",
+            "safety_concern": True,
+            "safety_concern_reason": "Major arterial highway obstruction affecting airport transit corridor.",
+            "people_or_infrastructure_affected": ["WEH Northbound carriageway"],
+            "source_attribution": "motorist",
+            "is_forwarded_message": False,
+            "explicit_facts": ["Huge tree crashed on WEH", "Two lanes totally blocked before Bandra flyover north side", "Bumper-to-bumper traffic"],
+            "model_inferences": ["Severe arterial gridlock building"],
+            "missing_information": ["Downed power cables or vehicle damage"],
+            "ambiguities": [],
+            "contradictions": [],
+            "follow_up_questions": ["Are tree cutters or cranes dispatched?"],
+            # Legacy aliases
             "hazard_type": "tree_fall",
             "severity": "high",
             "water_depth_cm": None,
@@ -201,15 +386,18 @@ def seed_demo_data(db: Session = Depends(get_db)):
             "confidence_score": 0.93,
             "sentiment_urgency": "urgent",
             "language_detected": "en",
-            "summary": "Large tree fallen across two lanes of WEH near Bandra causing extensive highway congestion."
+            "summary": "Large tree fallen across two lanes of WEH near Bandra causing extensive highway congestion.",
         },
         submitted_at=now - timedelta(hours=1, minutes=45),
-        processed_at=now - timedelta(hours=1, minutes=44)
+        processed_at=now - timedelta(hours=1, minutes=44),
     )
 
     # Report 5: Unverified forwarded claim (Rumor)
     rep5 = Report(
         id="rep-rumor-forward",
+        reference_code="SAH-2026-RUMR05",
+        user_id="usr-reporter-001",
+        source_fingerprint="fp-rumor-forward-005",
         original_text="FORWARDED AS RECEIVED: Vihar dam gates have collapsed and massive flood wave heading towards Powai and Kurla! Evacuate immediately!",
         media_path=None,
         media_type=None,
@@ -219,8 +407,38 @@ def seed_demo_data(db: Session = Depends(get_db)):
         coordinates_lat=None,
         coordinates_lng=None,
         processing_status="needs_review",
-        extraction_source="demo",
+        extraction_source="deterministic-demo",
+        extraction_metadata={
+            "provider": "deterministic-demo",
+            "mode": "demo",
+            "model": "demo-script-v1",
+            "latency_ms": 10,
+            "attempt_count": 1,
+            "schema_version": "1.0.0",
+            "simulated": True,
+            "processed_at": (now - timedelta(hours=1, minutes=14)).isoformat(),
+        },
         extracted_json={
+            "category": "unknown",
+            "short_summary": "Unverified panic viral message alleging dam gate collapse; zero sensory or telemetry corroboration.",
+            "original_text_language": "en",
+            "reported_location_text": "Vihar Dam / Powai area (Unverified)",
+            "location_precision": "neighborhood",
+            "location_source": "text",
+            "incident_time": None,
+            "claimed_severity": "medium",
+            "safety_concern": False,
+            "safety_concern_reason": "Unsubstantiated rumor with no official alert or sensor corroboration.",
+            "people_or_infrastructure_affected": [],
+            "source_attribution": "WhatsApp viral forward",
+            "is_forwarded_message": True,
+            "explicit_facts": ["Message is forwarded as received", "Alleges Vihar dam gates collapsed"],
+            "model_inferences": ["High probability of panic hoax"],
+            "missing_information": ["Official telemetry from MCGM Disaster Management"],
+            "ambiguities": ["No source timestamp or authority attribution"],
+            "contradictions": ["Dam collapse claim contradicts normal sensor telemetry"],
+            "follow_up_questions": ["Has municipal disaster control issued an official clarification?"],
+            # Legacy aliases
             "hazard_type": "unverified_rumor",
             "severity": "medium",
             "water_depth_cm": None,
@@ -234,15 +452,18 @@ def seed_demo_data(db: Session = Depends(get_db)):
             "confidence_score": 0.40,
             "sentiment_urgency": "moderate",
             "language_detected": "en",
-            "summary": "Unverified panic viral message alleging dam gate collapse; zero sensory or telemetry corroboration."
+            "summary": "Unverified panic viral message alleging dam gate collapse; zero sensory or telemetry corroboration.",
         },
         submitted_at=now - timedelta(hours=1, minutes=15),
-        processed_at=now - timedelta(hours=1, minutes=14)
+        processed_at=now - timedelta(hours=1, minutes=14),
     )
 
     # Report 6: Incomplete or contradictory location details
     rep6 = Report(
         id="rep-ambiguous-loc",
+        reference_code="SAH-2026-AMBG06",
+        user_id="usr-reporter-001",
+        source_fingerprint="fp-ambiguous-loc-006",
         original_text="Water is entering into our street near the old temple or railway bridge, not sure if its Dadar or Sion side, water is up to shin level.",
         media_path=None,
         media_type=None,
@@ -252,8 +473,38 @@ def seed_demo_data(db: Session = Depends(get_db)):
         coordinates_lat=None,
         coordinates_lng=None,
         processing_status="needs_review",
-        extraction_source="demo",
+        extraction_source="deterministic-demo",
+        extraction_metadata={
+            "provider": "deterministic-demo",
+            "mode": "demo",
+            "model": "demo-script-v1",
+            "latency_ms": 12,
+            "attempt_count": 1,
+            "schema_version": "1.0.0",
+            "simulated": True,
+            "processed_at": (now - timedelta(minutes=44)).isoformat(),
+        },
         extracted_json={
+            "category": "waterlogging",
+            "short_summary": "Reported localized waterlogging with conflicting and incomplete landmark cues.",
+            "original_text_language": "en",
+            "reported_location_text": "Ambiguous Boundary (Dadar/Sion border)",
+            "location_precision": "neighborhood",
+            "location_source": "text",
+            "incident_time": None,
+            "claimed_severity": "medium",
+            "safety_concern": False,
+            "safety_concern_reason": None,
+            "people_or_infrastructure_affected": ["Local residential lane"],
+            "source_attribution": "unknown caller",
+            "is_forwarded_message": False,
+            "explicit_facts": ["Water entering street", "Water depth up to shin level (~35cm)"],
+            "model_inferences": ["Localized lane drainage impediment"],
+            "missing_information": ["Exact ward boundary (Dadar vs Sion)", "Specific street or landmark"],
+            "ambiguities": ["Conflicting boundary landmarks reported"],
+            "contradictions": [],
+            "follow_up_questions": ["Can the reporter provide a specific cross street or shop name?"],
+            # Legacy aliases
             "hazard_type": "waterlogging",
             "severity": "medium",
             "water_depth_cm": 35,
@@ -267,10 +518,10 @@ def seed_demo_data(db: Session = Depends(get_db)):
             "confidence_score": 0.55,
             "sentiment_urgency": "moderate",
             "language_detected": "en",
-            "summary": "Reported localized waterlogging with conflicting and incomplete landmark cues."
+            "summary": "Reported localized waterlogging with conflicting and incomplete landmark cues.",
         },
         submitted_at=now - timedelta(minutes=45),
-        processed_at=now - timedelta(minutes=44)
+        processed_at=now - timedelta(minutes=44),
     )
 
     db.add_all([rep1, rep2, rep3, rep4, rep5, rep6])
@@ -286,7 +537,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         similarity_score=0.92,
         match_rationale="Matching category: waterlogging | Very close spatial proximity: ~150m | Contextual keyword: Hindmata, underpass",
         reviewed_by="coordinator@sahaayak.ai",
-        reviewed_at=now - timedelta(hours=2, minutes=20)
+        reviewed_at=now - timedelta(hours=2, minutes=20),
     )
     # rep2 is confirmed
     link2 = IncidentReportLink(
@@ -296,7 +547,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         similarity_score=0.90,
         match_rationale="Matching category: waterlogging | Very close spatial proximity: ~200m | Shared landmark: Dadar TT Circle",
         reviewed_by="coordinator@sahaayak.ai",
-        reviewed_at=now - timedelta(hours=2)
+        reviewed_at=now - timedelta(hours=2),
     )
     # rep3 is suggested (awaiting coordinator review in demo)
     link3 = IncidentReportLink(
@@ -306,7 +557,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         similarity_score=0.89,
         match_rationale="Matching category: waterlogging | High spatial overlap (~100m) | Marathi corroboration mentioning Hindmata flyover transit diversion",
         reviewed_by=None,
-        reviewed_at=None
+        reviewed_at=None,
     )
     # rep4 linked to WEH tree fall
     link4 = IncidentReportLink(
@@ -316,7 +567,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         similarity_score=0.95,
         match_rationale="Direct report describing tree fall blocking WEH near Bandra flyover.",
         reviewed_by="coordinator@sahaayak.ai",
-        reviewed_at=now - timedelta(hours=1, minutes=30)
+        reviewed_at=now - timedelta(hours=1, minutes=30),
     )
 
     db.add_all([link1, link2, link3, link4])
@@ -332,7 +583,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         is_simulated=True,
         claim_summary="Knee-deep water (~85cm) submerging underpass road surface.",
         verification_status="corroborating",
-        reviewer_notes="Corroborated by secondary reports and drainage sensor gauges."
+        reviewer_notes="Corroborated by secondary reports and drainage sensor gauges.",
     )
     ev2 = EvidenceItem(
         incident_id=inc_waterlogging.id,
@@ -343,7 +594,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         is_simulated=True,
         claim_summary="Culvert intake flow rate saturated; sump reservoir level at 98% capacity.",
         verification_status="corroborating",
-        reviewer_notes="Telemetry confirms drainage saturation since 08:30 IST."
+        reviewer_notes="Telemetry confirms drainage saturation since 08:30 IST.",
     )
     ev3 = EvidenceItem(
         incident_id=inc_waterlogging.id,
@@ -354,7 +605,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         is_simulated=True,
         claim_summary="Dr. B.A. Road closed for small vehicular traffic between Dadar and Parel; transit diverted via flyover upper deck.",
         verification_status="corroborating",
-        reviewer_notes="Official diversion confirmation."
+        reviewer_notes="Official diversion confirmation.",
     )
     ev4 = EvidenceItem(
         incident_id=inc_waterlogging.id,
@@ -365,7 +616,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         is_simulated=True,
         claim_summary="Alleges culvert wall collapse under Dadar flyover.",
         verification_status="conflicting",
-        reviewer_notes="Conflicting claim refuted by MCGM ward engineer site visual inspection; retaining wall remains intact."
+        reviewer_notes="Conflicting claim refuted by MCGM ward engineer site visual inspection; retaining wall remains intact.",
     )
 
     db.add_all([ev1, ev2, ev3, ev4])
@@ -380,7 +631,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         status="in_progress",
         assigned_to="Ward F-South Drainage Team",
         approved_by="coordinator@sahaayak.ai",
-        approved_at=now - timedelta(hours=2, minutes=10)
+        approved_at=now - timedelta(hours=2, minutes=10),
     )
     task2 = Task(
         incident_id=inc_waterlogging.id,
@@ -390,7 +641,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         status="completed",
         assigned_to="Matunga Traffic Division",
         approved_by="coordinator@sahaayak.ai",
-        approved_at=now - timedelta(hours=2, minutes=30)
+        approved_at=now - timedelta(hours=2, minutes=30),
     )
     task3 = Task(
         incident_id=inc_waterlogging.id,
@@ -399,7 +650,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         priority="medium",
         status="suggested",
         assigned_to=None,
-        approved_by=None
+        approved_by=None,
     )
     task4 = Task(
         incident_id=inc_tree.id,
@@ -409,7 +660,7 @@ def seed_demo_data(db: Session = Depends(get_db)):
         status="pending",
         assigned_to="Garden Cell Emergency Unit #02",
         approved_by="coordinator@sahaayak.ai",
-        approved_at=now - timedelta(hours=1, minutes=20)
+        approved_at=now - timedelta(hours=1, minutes=20),
     )
 
     db.add_all([task1, task2, task3, task4])
@@ -421,24 +672,31 @@ def seed_demo_data(db: Session = Depends(get_db)):
         action="SYSTEM_INITIALIZED",
         entity_type="system",
         entity_id="init",
-        details={"environment": "demo", "seed_time": now.isoformat()},
-        timestamp=now - timedelta(hours=3)
+        before_state=None,
+        after_state={"environment": "demo", "seed_time": now.isoformat()},
+        timestamp=now - timedelta(hours=3),
     )
     audit2 = AuditEvent(
         actor="coordinator@sahaayak.ai",
         action="MATCH_CONFIRMED",
         entity_type="link",
         entity_id=link1.id,
-        details={"incident_id": inc_waterlogging.id, "report_id": rep1.id},
-        timestamp=now - timedelta(hours=2, minutes=20)
+        before_state={"status": "suggested"},
+        after_state={
+            "status": "confirmed",
+            "incident_id": inc_waterlogging.id,
+            "report_id": rep1.id,
+        },
+        timestamp=now - timedelta(hours=2, minutes=20),
     )
     audit3 = AuditEvent(
         actor="coordinator@sahaayak.ai",
         action="TASK_APPROVED",
         entity_type="task",
         entity_id=task1.id,
-        details={"title": task1.title, "assignee": task1.assigned_to},
-        timestamp=now - timedelta(hours=2, minutes=10)
+        before_state={"status": "suggested"},
+        after_state={"status": "pending", "title": task1.title, "assignee": task1.assigned_to},
+        timestamp=now - timedelta(hours=2, minutes=10),
     )
 
     db.add_all([audit1, audit2, audit3])
@@ -447,9 +705,10 @@ def seed_demo_data(db: Session = Depends(get_db)):
     return {
         "status": "success",
         "message": "Deterministic demo dataset seeded successfully",
+        "users_count": 3,
         "incidents_count": 2,
         "reports_count": 6,
         "links_count": 4,
         "evidence_count": 4,
-        "tasks_count": 4
+        "tasks_count": 4,
     }

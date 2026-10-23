@@ -1,5 +1,5 @@
-from typing import Dict, Any, Tuple, List
-from backend.app.models.all_models import Incident, Report
+from typing import List, Tuple
+
 
 class PrioritizationService:
     @staticmethod
@@ -9,7 +9,7 @@ class PrioritizationService:
         affected_infrastructure: List[str],
         casualties_flag: bool,
         linked_report_count: int,
-        conflicting_evidence: bool = False
+        conflicting_evidence: bool = False,
     ) -> Tuple[str, str]:
         """
         Calculates suggested priority (critical, high, medium, low) and human-readable rationale.
@@ -28,9 +28,20 @@ class PrioritizationService:
             score += 20
             factors.append(f"Moderate waterlogging ({water_depth_cm}cm)")
 
-        critical_infra_keywords = ["hospital", "railway", "station", "subway", "flyover", "highway", "power", "grid", "ambulance"]
+        critical_infra_keywords = [
+            "hospital",
+            "railway",
+            "station",
+            "subway",
+            "flyover",
+            "highway",
+            "power",
+            "grid",
+            "ambulance",
+        ]
         infra_matches = [
-            item for item in affected_infrastructure 
+            item
+            for item in affected_infrastructure
             if any(k in item.lower() for k in critical_infra_keywords)
         ]
         if infra_matches:
@@ -39,7 +50,9 @@ class PrioritizationService:
 
         if linked_report_count >= 3:
             score += 15
-            factors.append(f"High community corroboration ({linked_report_count} clustered reports)")
+            factors.append(
+                f"High community corroboration ({linked_report_count} clustered reports)"
+            )
 
         if conflicting_evidence:
             factors.append("Conflicting claims detected - flagged for urgent ground verification")
@@ -55,5 +68,6 @@ class PrioritizationService:
 
         rationale = " ; ".join(factors) if factors else "Standard localized hazard assessment"
         return priority, f"Priority score {score}: {rationale}"
+
 
 prioritization_service = PrioritizationService()

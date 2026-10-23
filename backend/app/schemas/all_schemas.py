@@ -1,36 +1,87 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
+from backend.app.schemas.extraction_schema import (
+    CoordinatorCorrectionSchema,
+    ExtractionMetadata,
+    ExtractionResult,
+    IncidentCategoryEnum,
+    LanguageEnum,
+    LocationPrecisionEnum,
+    LocationSourceEnum,
+    ReportExtractionSchema,
+    SeverityEnum,
+)
 from pydantic import BaseModel, Field
 
-# Extraction Structured Output Schema
-class ExtractionResultSchema(BaseModel):
-    hazard_type: str = Field(description="Primary category, e.g. waterlogging, tree_fall, road_blocked, power_outage, unknown")
-    severity: str = Field(description="critical, high, medium, low, unknown")
-    water_depth_cm: Optional[int] = Field(None, description="Reported or inferred water depth in cm if waterlogging")
-    location_name: Optional[str] = Field(None, description="Landmarks or street/area name extracted from text")
-    approximate_lat: Optional[float] = Field(None, description="Extracted approximate latitude if mentioned or recognized")
-    approximate_lng: Optional[float] = Field(None, description="Extracted approximate longitude if mentioned or recognized")
-    has_grounded_coordinates: bool = Field(False, description="Whether coordinates are grounded or approximate")
-    affected_infrastructure: List[str] = Field(default_factory=list, description="Roads, hospitals, metro, power lines, etc.")
-    urgent_needs: List[str] = Field(default_factory=list, description="Evacuation, water pump, ambulance, rescue boat, tree cutter")
-    casualties_flag: bool = Field(False, description="Whether human distress or injury is mentioned")
-    confidence_score: float = Field(0.85, ge=0.0, le=1.0)
-    sentiment_urgency: str = Field("medium", description="critical, urgent, moderate, low")
-    language_detected: str = Field("en", description="en, hi, mr, unknown")
-    summary: str = Field(description="One-sentence objective summary")
+
+# Extraction Structured Output Schema (Legacy alias maintained for backwards compatibility)
+class ExtractionResultSchema(ReportExtractionSchema):
+    pass
+
+
+__all__ = [
+    "ReportExtractionSchema",
+    "ExtractionResultSchema",
+    "CoordinatorCorrectionSchema",
+    "ExtractionMetadata",
+    "ExtractionResult",
+    "IncidentCategoryEnum",
+    "LanguageEnum",
+    "LocationPrecisionEnum",
+    "LocationSourceEnum",
+    "SeverityEnum",
+]
+
+
+# User & Auth Schemas
+class UserRegisterRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=255)
+    username: str = Field(..., min_length=3, max_length=100)
+    password: str = Field(..., min_length=8, max_length=128)
+    full_name: Optional[str] = Field(None, max_length=255)
+
+
+class UserLoginRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255)
+    password: str = Field(..., min_length=1, max_length=128)
+
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    email: str
+    role: str
+    full_name: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuthResponse(BaseModel):
+    user: UserResponse
+    message: str
+    csrf_token: str
+
 
 # Report Schemas
 class ReportCreate(BaseModel):
-    original_text: str = Field(..., min_length=3)
+    original_text: str = Field(..., min_length=3, max_length=2000)
     input_language: Optional[str] = "en"
     reporter_name: Optional[str] = "Anonymous Citizen"
     reporter_contact: Optional[str] = None
     location_claim: Optional[str] = None
     coordinates_lat: Optional[float] = None
     coordinates_lng: Optional[float] = None
+    incident_time: Optional[datetime] = None
+    idempotency_key: Optional[str] = None
+
 
 class ReportResponse(BaseModel):
     id: str
+    reference_code: Optional[str] = None
+    user_id: Optional[str] = None
     original_text: str
     media_path: Optional[str] = None
     media_type: Optional[str] = None
@@ -40,15 +91,31 @@ class ReportResponse(BaseModel):
     location_claim: Optional[str] = None
     coordinates_lat: Optional[float] = None
     coordinates_lng: Optional[float] = None
+    location_precision: Optional[str] = "unknown"
+    source_fingerprint: Optional[str] = None
     processing_status: str
     error_message: Optional[str] = None
     extraction_source: str
     extracted_json: Optional[Dict[str, Any]] = None
+    extraction_metadata: Optional[Dict[str, Any]] = None
+    coordinator_correction: Optional[Dict[str, Any]] = None
+    correction_notes: Optional[str] = None
+    corrected_by: Optional[str] = None
+    corrected_at: Optional[datetime] = None
     submitted_at: datetime
     processed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+class PaginatedReportsResponse(BaseModel):
+    items: List[ReportResponse]
+    total: int
+    page: int
+    limit: int
+    pages: int
+
 
 # Incident Schemas
 class IncidentCreate(BaseModel):
@@ -64,6 +131,7 @@ class IncidentCreate(BaseModel):
     has_grounded_coordinates: bool = False
     is_simulated: bool = True
 
+
 class IncidentUpdate(BaseModel):
     title: Optional[str] = None
     summary: Optional[str] = None
@@ -71,6 +139,7 @@ class IncidentUpdate(BaseModel):
     approved_priority: Optional[str] = None
     priority_override_reason: Optional[str] = None
     evidence_status: Optional[str] = None
+
 
 class IncidentResponse(BaseModel):
     id: str
@@ -94,6 +163,7 @@ class IncidentResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 # Incident Report Link Schemas
 class IncidentReportLinkResponse(BaseModel):
     id: str
@@ -110,10 +180,12 @@ class IncidentReportLinkResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class LinkReviewRequest(BaseModel):
     action: Optional[str] = Field("confirm", description="'confirm' or 'reject'")
     reviewer_notes: Optional[str] = None
     reviewed_by: Optional[str] = "coordinator@sahaayak.ai"
+
 
 # Evidence Schemas
 class EvidenceCreate(BaseModel):
@@ -126,6 +198,7 @@ class EvidenceCreate(BaseModel):
     claim_summary: str
     verification_status: str = "unverified"
     reviewer_notes: Optional[str] = None
+
 
 class EvidenceResponse(BaseModel):
     id: str
@@ -143,6 +216,7 @@ class EvidenceResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 # Task Schemas
 class TaskCreate(BaseModel):
     incident_id: str
@@ -152,6 +226,7 @@ class TaskCreate(BaseModel):
     status: str = "suggested"
     assigned_to: Optional[str] = None
 
+
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
@@ -159,6 +234,7 @@ class TaskUpdate(BaseModel):
     status: Optional[str] = None
     assigned_to: Optional[str] = None
     approved_by: Optional[str] = None
+
 
 class TaskResponse(BaseModel):
     id: str
@@ -176,6 +252,7 @@ class TaskResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 # Audit Event Schema
 class AuditEventResponse(BaseModel):
     id: str
@@ -183,11 +260,13 @@ class AuditEventResponse(BaseModel):
     action: str
     entity_type: str
     entity_id: str
-    details: Optional[Dict[str, Any]] = None
+    before_state: Optional[Dict[str, Any]] = None
+    after_state: Optional[Dict[str, Any]] = None
     timestamp: datetime
 
     class Config:
         from_attributes = True
+
 
 # Health Response
 class HealthResponse(BaseModel):

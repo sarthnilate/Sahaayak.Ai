@@ -1,29 +1,37 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload
+from typing import List, Optional
 
 from backend.app.db.session import get_db
 from backend.app.models.all_models import (
-    Incident, Report, IncidentReportLink, EvidenceItem, Task, AuditEvent
+    AuditEvent,
+    EvidenceItem,
+    Incident,
+    IncidentReportLink,
+    Report,
+    Task,
 )
 from backend.app.schemas.all_schemas import (
-    IncidentResponse, IncidentCreate, IncidentUpdate,
-    IncidentReportLinkResponse, LinkReviewRequest,
-    EvidenceResponse, TaskResponse
+    EvidenceResponse,
+    IncidentCreate,
+    IncidentResponse,
+    IncidentUpdate,
+    LinkReviewRequest,
+    TaskResponse,
 )
-from backend.app.services.matching.service import matching_service
-from backend.app.services.prioritization.service import prioritization_service
 from backend.app.services.audit.service import audit_service
+from backend.app.services.prioritization.service import prioritization_service
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session, joinedload
 
 router = APIRouter()
+
 
 @router.get("/incidents", response_model=List[IncidentResponse])
 def list_incidents(
     category: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     query = db.query(Incident).order_by(Incident.created_at.desc())
     if category:
@@ -33,6 +41,7 @@ def list_incidents(
     if priority:
         query = query.filter(Incident.approved_priority == priority)
     return query.all()
+
 
 @router.post("/incidents", response_model=IncidentResponse)
 def create_incident(payload: IncidentCreate, db: Session = Depends(get_db)):
@@ -48,7 +57,7 @@ def create_incident(payload: IncidentCreate, db: Session = Depends(get_db)):
         latitude=payload.latitude,
         longitude=payload.longitude,
         has_grounded_coordinates=payload.has_grounded_coordinates,
-        is_simulated=payload.is_simulated
+        is_simulated=payload.is_simulated,
     )
     db.add(incident)
     db.commit()
@@ -60,10 +69,11 @@ def create_incident(payload: IncidentCreate, db: Session = Depends(get_db)):
         action="INCIDENT_CREATED",
         entity_type="incident",
         entity_id=incident.id,
-        details={"title": incident.title, "priority": incident.approved_priority}
+        details={"title": incident.title, "priority": incident.approved_priority},
     )
 
     return incident
+
 
 @router.get("/incidents/{incident_id}")
 def get_incident_detail(incident_id: str, db: Session = Depends(get_db)):
@@ -83,25 +93,27 @@ def get_incident_detail(incident_id: str, db: Session = Depends(get_db)):
     # Query audit events related to incident
     all_events = db.query(AuditEvent).order_by(AuditEvent.timestamp.desc()).limit(100).all()
     audit_events = [
-        a for a in all_events
-        if a.entity_id == incident_id or (isinstance(a.details, dict) and a.details.get("incident_id") == incident_id)
+        a
+        for a in all_events
+        if a.entity_id == incident_id
+        or (isinstance(a.after_state, dict) and a.after_state.get("incident_id") == incident_id)
     ][:20]
 
     return {
         "incident": IncidentResponse.model_validate(incident),
         "links": [
             {
-                "id": l.id,
-                "incident_id": l.incident_id,
-                "report_id": l.report_id,
-                "status": l.status,
-                "similarity_score": l.similarity_score,
-                "match_rationale": l.match_rationale,
-                "reviewed_by": l.reviewed_by,
-                "reviewed_at": l.reviewed_at,
-                "report": l.report
+                "id": link_item.id,
+                "incident_id": link_item.incident_id,
+                "report_id": link_item.report_id,
+                "status": link_item.status,
+                "similarity_score": link_item.similarity_score,
+                "match_rationale": link_item.match_rationale,
+                "reviewed_by": link_item.reviewed_by,
+                "reviewed_at": link_item.reviewed_at,
+                "report": link_item.report,
             }
-            for l in links
+            for link_item in links
         ],
         "evidence_items": [EvidenceResponse.model_validate(e) for e in evidence_items],
         "tasks": [TaskResponse.model_validate(t) for t in tasks],
@@ -112,12 +124,14 @@ def get_incident_detail(incident_id: str, db: Session = Depends(get_db)):
                 "action": a.action,
                 "entity_type": a.entity_type,
                 "entity_id": a.entity_id,
-                "details": a.details,
-                "timestamp": a.timestamp
+                "before_state": a.before_state,
+                "after_state": a.after_state,
+                "timestamp": a.timestamp,
             }
             for a in audit_events
-        ]
+        ],
     }
+
 
 @router.patch("/incidents/{incident_id}", response_model=IncidentResponse)
 def update_incident(incident_id: str, payload: IncidentUpdate, db: Session = Depends(get_db)):
@@ -125,10 +139,7 @@ def update_incident(incident_id: str, payload: IncidentUpdate, db: Session = Dep
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    before_state = {
-        "status": incident.status,
-        "priority": incident.approved_priority
-    }
+    before_state = {"status": incident.status, "priority": incident.approved_priority}
 
     if payload.title is not None:
         incident.title = payload.title
@@ -137,10 +148,13 @@ def update_incident(incident_id: str, payload: IncidentUpdate, db: Session = Dep
     if payload.status is not None:
         incident.status = payload.status
     if payload.approved_priority is not None:
-        if payload.approved_priority != incident.suggested_priority and not payload.priority_override_reason:
+        if (
+            payload.approved_priority != incident.suggested_priority
+            and not payload.priority_override_reason
+        ):
             raise HTTPException(
                 status_code=400,
-                detail="A priority_override_reason is required when overriding AI suggested priority"
+                detail="A priority_override_reason is required when overriding AI suggested priority",
             )
         incident.approved_priority = payload.approved_priority
         incident.priority_override_reason = payload.priority_override_reason
@@ -162,24 +176,28 @@ def update_incident(incident_id: str, payload: IncidentUpdate, db: Session = Dep
             "after": {
                 "status": incident.status,
                 "priority": incident.approved_priority,
-                "reason": incident.priority_override_reason
-            }
-        }
+                "reason": incident.priority_override_reason,
+            },
+        },
     )
 
     return incident
+
 
 @router.post("/incidents/{incident_id}/reports/{report_id}/confirm")
 def confirm_report_match(
     incident_id: str,
     report_id: str,
     payload: Optional[LinkReviewRequest] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    link = db.query(IncidentReportLink).filter(
-        IncidentReportLink.incident_id == incident_id,
-        IncidentReportLink.report_id == report_id
-    ).first()
+    link = (
+        db.query(IncidentReportLink)
+        .filter(
+            IncidentReportLink.incident_id == incident_id, IncidentReportLink.report_id == report_id
+        )
+        .first()
+    )
 
     if not link:
         # Create confirmed link if not existing
@@ -188,7 +206,7 @@ def confirm_report_match(
             report_id=report_id,
             status="confirmed",
             similarity_score=1.0,
-            match_rationale="Manually linked and confirmed by coordinator"
+            match_rationale="Manually linked and confirmed by coordinator",
         )
         db.add(link)
     else:
@@ -196,24 +214,27 @@ def confirm_report_match(
 
     link.reviewed_by = payload.reviewed_by if payload else "coordinator@sahaayak.ai"
     link.reviewed_at = datetime.utcnow()
-    
+
     # Recalculate incident priority based on new confirmed evidence
     incident = db.query(Incident).filter(Incident.id == incident_id).first()
-    confirmed_count = db.query(IncidentReportLink).filter(
-        IncidentReportLink.incident_id == incident_id,
-        IncidentReportLink.status == "confirmed"
-    ).count()
+    confirmed_count = (
+        db.query(IncidentReportLink)
+        .filter(
+            IncidentReportLink.incident_id == incident_id, IncidentReportLink.status == "confirmed"
+        )
+        .count()
+    )
 
     report = db.query(Report).filter(Report.id == report_id).first()
     extracted = (report.extracted_json or {}) if report else {}
-    
+
     new_priority, rationale = prioritization_service.calculate_priority(
         category=incident.category,
         water_depth_cm=extracted.get("water_depth_cm"),
         affected_infrastructure=extracted.get("affected_infrastructure", []),
         casualties_flag=extracted.get("casualties_flag", False),
         linked_report_count=confirmed_count,
-        conflicting_evidence=incident.evidence_status == "conflicting_evidence"
+        conflicting_evidence=incident.evidence_status == "conflicting_evidence",
     )
     incident.suggested_priority = new_priority
     incident.priority_rationale = rationale
@@ -231,23 +252,27 @@ def confirm_report_match(
         details={
             "incident_id": incident_id,
             "report_id": report_id,
-            "new_suggested_priority": new_priority
-        }
+            "new_suggested_priority": new_priority,
+        },
     )
 
     return {"status": "confirmed", "link_id": link.id, "new_suggested_priority": new_priority}
+
 
 @router.post("/incidents/{incident_id}/reports/{report_id}/reject")
 def reject_report_match(
     incident_id: str,
     report_id: str,
     payload: Optional[LinkReviewRequest] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    link = db.query(IncidentReportLink).filter(
-        IncidentReportLink.incident_id == incident_id,
-        IncidentReportLink.report_id == report_id
-    ).first()
+    link = (
+        db.query(IncidentReportLink)
+        .filter(
+            IncidentReportLink.incident_id == incident_id, IncidentReportLink.report_id == report_id
+        )
+        .first()
+    )
 
     if not link:
         raise HTTPException(status_code=404, detail="Association link not found")
@@ -263,7 +288,7 @@ def reject_report_match(
         action="MATCH_REJECTED",
         entity_type="link",
         entity_id=link.id,
-        details={"incident_id": incident_id, "report_id": report_id}
+        details={"incident_id": incident_id, "report_id": report_id},
     )
 
     return {"status": "rejected", "link_id": link.id}

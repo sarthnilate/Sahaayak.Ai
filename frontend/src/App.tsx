@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/common/Navbar';
+import { LoginView } from './components/views/LoginView';
+import { SubmitReportView } from './components/views/SubmitReportView';
 import { DashboardView } from './components/views/DashboardView';
 import { ReportsView } from './components/views/ReportsView';
 import { IncidentsView } from './components/views/IncidentsView';
@@ -7,10 +10,12 @@ import { TasksView } from './components/views/TasksView';
 import { AuditView } from './components/views/AuditView';
 import { getHealth, listIncidents, listReports, listTasks, seedDemoData } from './services/api';
 import { Incident, Report, Task, SystemHealth } from './types';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
-export function App() {
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+function AuthenticatedApp() {
+  const { user, hasRole } = useAuth();
+  const defaultTab = hasRole('coordinator', 'admin') ? 'dashboard' : 'submit';
+  const [activeTab, setActiveTab] = useState<string>(defaultTab);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
 
   const [health, setHealth] = useState<SystemHealth | null>(null);
@@ -28,18 +33,19 @@ export function App() {
     try {
       const [h, incList, repList, taskList] = await Promise.all([
         getHealth().catch(() => null),
-        listIncidents().catch(() => []),
-        listReports().catch(() => []),
-        listTasks().catch(() => [])
+        hasRole('coordinator', 'admin') ? listIncidents().catch(() => []) : Promise.resolve([]),
+        hasRole('coordinator', 'admin') ? listReports().catch(() => ({ items: [], total: 0, page: 1, limit: 20, pages: 0 })) : Promise.resolve({ items: [], total: 0, page: 1, limit: 20, pages: 0 }),
+        hasRole('coordinator', 'admin') ? listTasks().catch(() => []) : Promise.resolve([])
       ]);
 
       setHealth(h);
-      setIncidents(incList);
-      setReports(repList);
-      setTasks(taskList);
+      setIncidents(incList as Incident[]);
+      const reportItems = Array.isArray(repList) ? repList : (repList as any).items || [];
+      setReports(reportItems);
+      setTasks(taskList as Task[]);
 
-      // If database is empty, automatically seed the official deterministic dataset
-      if (incList.length === 0 && repList.length === 0) {
+      // If database is empty and user is admin/coordinator, automatically seed
+      if (hasRole('coordinator', 'admin') && (incList as Incident[]).length === 0 && reportItems.length === 0) {
         await handleSeedDemo();
       }
     } catch (err: any) {
@@ -59,7 +65,8 @@ export function App() {
         listTasks()
       ]);
       setIncidents(incList);
-      setReports(repList);
+      const reportItems = Array.isArray(repList) ? repList : (repList as any).items || [];
+      setReports(reportItems);
       setTasks(taskList);
       if (incList.length > 0 && !selectedIncidentId) {
         setSelectedIncidentId(incList[0].id);
@@ -112,7 +119,9 @@ export function App() {
           </div>
         )}
 
-        {activeTab === 'dashboard' && (
+        {activeTab === 'submit' && <SubmitReportView />}
+
+        {activeTab === 'dashboard' && hasRole('coordinator', 'admin') && (
           <DashboardView
             incidents={incidents}
             reports={reports}
@@ -123,7 +132,7 @@ export function App() {
           />
         )}
 
-        {activeTab === 'reports' && (
+        {activeTab === 'reports' && hasRole('coordinator', 'admin') && (
           <ReportsView
             reports={reports}
             onRefresh={loadData}
@@ -131,7 +140,7 @@ export function App() {
           />
         )}
 
-        {activeTab === 'incidents' && (
+        {activeTab === 'incidents' && hasRole('coordinator', 'admin') && (
           <IncidentsView
             incidents={incidents}
             selectedIncidentId={selectedIncidentId}
@@ -140,7 +149,7 @@ export function App() {
           />
         )}
 
-        {activeTab === 'tasks' && (
+        {activeTab === 'tasks' && hasRole('coordinator', 'admin') && (
           <TasksView
             tasks={tasks}
             onRefresh={loadData}
@@ -148,7 +157,7 @@ export function App() {
           />
         )}
 
-        {activeTab === 'audit' && (
+        {activeTab === 'audit' && hasRole('coordinator', 'admin') && (
           <AuditView
             health={health}
           />
@@ -166,6 +175,35 @@ export function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function AppContent() {
+  const { isLoading, isAuthenticated } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0B0B0B] flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-[#FF2DA8] animate-spin mx-auto mb-3" />
+          <p className="text-xs font-mono text-[#A7A7A7]">INITIALIZING SESSION...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
+
+  return <AuthenticatedApp />;
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

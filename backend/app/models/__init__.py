@@ -1,7 +1,39 @@
 from backend.app.models.all_models import (
-    User, Report, Incident, IncidentReportLink, EvidenceItem, Task, AuditEvent
+    AuditEvent,
+    Base,
+    EvidenceItem,
+    EvidenceStatusEnum,
+    Incident,
+    IncidentReportLink,
+    IncidentStatusEnum,
+    LinkStatusEnum,
+    LocationPrecisionEnum,
+    PriorityEnum,
+    Report,
+    ReportStatusEnum,
+    RoleEnum,
+    Task,
+    TaskRecommendation,
+    TaskStatusEnum,
+    User,
 )
 
 __all__ = [
-    "User", "Report", "Incident", "IncidentReportLink", "EvidenceItem", "Task", "AuditEvent"
+    "Base",
+    "User",
+    "Report",
+    "Incident",
+    "IncidentReportLink",
+    "EvidenceItem",
+    "Task",
+    "TaskRecommendation",
+    "AuditEvent",
+    "RoleEnum",
+    "ReportStatusEnum",
+    "LocationPrecisionEnum",
+    "IncidentStatusEnum",
+    "PriorityEnum",
+    "EvidenceStatusEnum",
+    "LinkStatusEnum",
+    "TaskStatusEnum",
 ]

@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sahaayak_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sahaayak_db
+      POSTGRES_USER: sahaayak_user
+      POSTGRES_PASSWORD: sahaayak_secure_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sahaayak_user -d sahaayak_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: sahaayak_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql://sahaayak_user:sahaayak_secure_password_2026@db:5432/sahaayak_db
+      SECRET_KEY: sahaayak_super_secret_jwt_key_minimum_32_characters_long
+      AI_MODE: demo
+      GEMINI_API_KEY: ""
+      CORS_ORIGINS: '["http://localhost:5173", "http://127.0.0.1:5173"]'
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:

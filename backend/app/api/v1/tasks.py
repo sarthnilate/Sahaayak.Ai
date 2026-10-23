@@ -1,26 +1,28 @@
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
 
 from backend.app.db.session import get_db
-from backend.app.models.all_models import Task, Incident
-from backend.app.schemas.all_schemas import TaskCreate, TaskUpdate, TaskResponse
+from backend.app.models.all_models import Incident, Task
+from backend.app.schemas.all_schemas import TaskCreate, TaskResponse, TaskUpdate
 from backend.app.services.audit.service import audit_service
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 router = APIRouter()
+
 
 class ApproveTaskRequest(BaseModel):
     approved_by: Optional[str] = "coordinator@sahaayak.ai"
     assigned_to: Optional[str] = None
+
 
 @router.get("/tasks", response_model=List[TaskResponse])
 def list_tasks(
     status: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
     incident_id: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     query = db.query(Task).order_by(Task.created_at.desc())
     if status:
@@ -30,6 +32,7 @@ def list_tasks(
     if incident_id:
         query = query.filter(Task.incident_id == incident_id)
     return query.all()
+
 
 @router.post("/incidents/{incident_id}/tasks", response_model=TaskResponse)
 def create_task(incident_id: str, payload: TaskCreate, db: Session = Depends(get_db)):
@@ -43,7 +46,7 @@ def create_task(incident_id: str, payload: TaskCreate, db: Session = Depends(get
         description=payload.description,
         priority=payload.priority,
         status=payload.status,
-        assigned_to=payload.assigned_to
+        assigned_to=payload.assigned_to,
     )
     db.add(task)
     db.commit()
@@ -55,10 +58,11 @@ def create_task(incident_id: str, payload: TaskCreate, db: Session = Depends(get
         action="TASK_CREATED",
         entity_type="task",
         entity_id=task.id,
-        details={"title": task.title, "priority": task.priority, "status": task.status}
+        details={"title": task.title, "priority": task.priority, "status": task.status},
     )
 
     return task
+
 
 @router.patch("/tasks/{task_id}", response_model=TaskResponse)
 def update_task(task_id: str, payload: TaskUpdate, db: Session = Depends(get_db)):
@@ -91,10 +95,11 @@ def update_task(task_id: str, payload: TaskUpdate, db: Session = Depends(get_db)
         action="TASK_STATUS_TRANSITION",
         entity_type="task",
         entity_id=task.id,
-        details={"before": before_status, "after": task.status, "assigned_to": task.assigned_to}
+        details={"before": before_status, "after": task.status, "assigned_to": task.assigned_to},
     )
 
     return task
+
 
 @router.post("/tasks/{task_id}/approve", response_model=TaskResponse)
 def approve_task(task_id: str, payload: ApproveTaskRequest, db: Session = Depends(get_db)):
@@ -107,7 +112,7 @@ def approve_task(task_id: str, payload: ApproveTaskRequest, db: Session = Depend
     task.approved_at = datetime.utcnow()
     if payload.assigned_to:
         task.assigned_to = payload.assigned_to
-    
+
     task.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(task)
@@ -118,7 +123,7 @@ def approve_task(task_id: str, payload: ApproveTaskRequest, db: Session = Depend
         action="TASK_APPROVED",
         entity_type="task",
         entity_id=task.id,
-        details={"title": task.title, "assigned_to": task.assigned_to}
+        details={"title": task.title, "assigned_to": task.assigned_to},
     )
 
     return task
