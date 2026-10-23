@@ -49,7 +49,12 @@ async function handleResponse<T>(res: Response): Promise<T> {
         errorJson.error.details
       );
     }
-    const message = (errorJson && errorJson.detail) || `HTTP ${res.status}: ${res.statusText}`;
+    let message = (errorJson && errorJson.detail) || `HTTP ${res.status}: ${res.statusText}`;
+    if (res.status === 405 || (res.status === 404 && res.url.includes('/api/'))) {
+      if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+        message = 'Backend API is not connected to this Vercel deployment. Please run locally at http://localhost:5173 or configure VITE_API_BASE_URL.';
+      }
+    }
     throw new ApiError('HTTP_ERROR', message, res.headers.get('X-Request-ID') || 'unknown');
   }
   return res.json();
