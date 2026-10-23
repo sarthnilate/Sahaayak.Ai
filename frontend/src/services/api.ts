@@ -99,11 +99,18 @@ export async function logoutUser(): Promise<{ status: string; message: string }>
 }
 
 export async function getMe(): Promise<User> {
-  const res = await fetch(`${API_BASE}/auth/me`, {
-    credentials: 'include',
-    headers: getDefaultHeaders(false)
-  });
-  return handleResponse<User>(res);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      credentials: 'include',
+      headers: getDefaultHeaders(false),
+      signal: controller.signal
+    });
+    return await handleResponse<User>(res);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 // ==============================================================================
