@@ -3,7 +3,8 @@ import {
   PaginatedIncidents, TimelineEvent, ReportMatchesResponse, IncidentEvidenceListResponse
 } from '../types';
 
-const API_BASE = '/api/v1';
+const RAW_BASE = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE = RAW_BASE ? `${RAW_BASE.replace(/\/+$/, '')}/api/v1` : '/api/v1';
 
 export interface ApiErrorEnvelope {
   error: {
