@@ -63,20 +63,35 @@ export const Navbar: React.FC<Props> = ({
         
         {/* Brand identity */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#FF2DA8] to-[#151515] p-0.5 shadow-[0_0_15px_rgba(255,45,168,0.4)]">
-            <div className="w-full h-full bg-[#0B0B0B] rounded-[10px] flex items-center justify-center">
-              <span className="font-mono font-black text-sm text-[#FF2DA8]">SA</span>
+          <div className="relative group cursor-pointer" onClick={() => setActiveTab('dashboard')}>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#FF2DA8] via-[#8B00FF] to-[#D4FF3F] p-[1.5px] shadow-[0_0_20px_rgba(255,45,168,0.45)] group-hover:shadow-[0_0_25px_rgba(212,255,63,0.6)] transition-all duration-300">
+              <div className="w-full h-full bg-[#0B0B0B] rounded-[10px] flex items-center justify-center relative overflow-hidden">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2L3 7V12C3 17.5 6.8 22.3 12 23.5C17.2 22.3 21 17.5 21 12V7L12 2Z" fill="url(#logo_grad)" fillOpacity="0.2" stroke="#FF2DA8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 7V12L15 15" stroke="#D4FF3F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="12" cy="12" r="2.5" fill="#D4FF3F" />
+                  <defs>
+                    <linearGradient id="logo_grad" x1="3" y1="2" x2="21" y2="23.5" gradientUnits="userSpaceOnUse">
+                      <stop stopColor="#FF2DA8" />
+                      <stop offset="1" stopColor="#D4FF3F" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
             </div>
+            <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#48C78E] border-2 border-[#0B0B0B] rounded-full" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-extrabold text-base tracking-wider text-white font-mono">SAHAAYAK.AI</h1>
-              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold uppercase bg-[#D4FF3F]/15 text-[#D4FF3F] border border-[#D4FF3F]/40">
-                OPS v1.0
+              <h1 className="font-extrabold text-base tracking-wider text-white font-mono" data-testid="brand-title">
+                SAHAAYAK.AI
+              </h1>
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold uppercase bg-[#D4FF3F]/15 text-[#D4FF3F] border border-[#D4FF3F]/40 shadow-[0_0_8px_rgba(212,255,63,0.25)]">
+                CRISIS OPS
               </span>
             </div>
             <p className="text-[11px] text-[#A7A7A7] font-mono tracking-wide">
-              FROM CHAOS TO ACTION • URBAN CRISIS INTELLIGENCE
+              URBAN CRISIS RESPONSE PLATFORM
             </p>
           </div>
         </div>
@@ -104,16 +119,14 @@ export const Navbar: React.FC<Props> = ({
 
         {/* Right side: user + status + actions */}
         <div className="flex items-center gap-3">
-          {/* AI Provider Status */}
-          <div className="hidden sm:flex flex-col text-right">
-            <div className="flex items-center justify-end gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#D4FF3F] animate-pulse" />
-              <span className="text-xs font-mono font-semibold text-white">
-                {health?.ai_provider || 'Google Gemini'}
-              </span>
-            </div>
-            <span className="text-[10px] font-mono text-[#A7A7A7]">
-              {health?.is_demo_mode ? 'Deterministic Fallback Ready' : 'Live Google API Active'}
+          {/* Clean minimal status pill without excessive multiline text */}
+          <div
+            title={`Engine: ${health?.ai_provider || 'Google Gemini'} | Mode: ${health?.is_demo_mode ? 'Deterministic Demo' : 'Live Gemini'}`}
+            className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#151515] border border-[#282828]"
+          >
+            <span className="w-2 h-2 rounded-full bg-[#D4FF3F] animate-pulse" />
+            <span className="text-xs font-mono font-bold text-[#E0E0E0]">
+              {health?.is_demo_mode ? 'DEMO' : 'LIVE'}
             </span>
           </div>
 

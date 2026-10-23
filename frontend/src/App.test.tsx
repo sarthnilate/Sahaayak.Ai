@@ -60,15 +60,15 @@ describe('Sahaayak AI Shell & Application', () => {
   it('renders the Sahaayak AI header with brand name', async () => {
     render(<App />);
     await waitFor(() => {
-      expect(screen.getByText(/SAHAAYAK\.AI/i)).toBeInTheDocument();
-      expect(screen.getByText(/FROM CHAOS TO ACTION/i)).toBeInTheDocument();
+      expect(screen.getByTestId('brand-title')).toHaveTextContent('SAHAAYAK.AI');
+      expect(screen.getByText('CRISIS OPS')).toBeInTheDocument();
     });
   });
 
   it('displays active AI provider and demo indicator', async () => {
     render(<App />);
     await waitFor(() => {
-      expect(screen.getByText(/Deterministic Demo Adapter/i)).toBeInTheDocument();
+      expect(screen.getByText(/DEMO/i)).toBeInTheDocument();
     });
   });
 
