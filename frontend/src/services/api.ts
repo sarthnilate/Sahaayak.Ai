@@ -62,7 +62,8 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 function getDefaultHeaders(isJson = true): HeadersInit {
   const headers: Record<string, string> = {
-    'X-CSRF-Token': getCsrfToken()
+    'X-CSRF-Token': getCsrfToken(),
+    'Bypass-Tunnel-Reminder': 'true'
   };
   if (isJson) {
     headers['Content-Type'] = 'application/json';

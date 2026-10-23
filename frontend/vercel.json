@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://lovely-tables-fly.loca.lt/api/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
