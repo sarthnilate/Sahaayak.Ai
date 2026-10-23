@@ -1,0 +1,23 @@
+# Sahaayak AI --- Memory Template
+
+## Active Phase
+- Current Phase: [Phase number]
+- Status: [Not Started | In Progress | Completed]
+
+## Architecture Decisions
+- [Key technical decisions]
+
+## Implemented Features
+- [List of completed items]
+
+## Files Changed/Created
+- [List of modified or new files]
+
+## Test Execution Results
+- [Commands run, tests passed/failed]
+
+## Known Blockers & Limitations
+- [Any current blockers]
+
+## Next Actions
+- [Immediate next tasks]

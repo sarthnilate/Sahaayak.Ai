@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #0B0B0B;
+  --color-surface: #151515;
+  --color-surface-raised: #1D1D1D;
+  --color-text: #FFFFFF;
+  --color-text-muted: #A7A7A7;
+  --color-border: #282828;
+
+  --color-primary: #FF2DA8;
+  --color-primary-hover: #E91E93;
+  --color-primary-soft: rgba(255, 45, 168, 0.12);
+
+  --color-accent-chartreuse: #D4FF3F;
+  --color-accent-chartreuse-soft: rgba(212, 255, 63, 0.12);
+
+  --color-success: #48C78E;
+  --color-warning: #F5B942;
+  --color-danger: #FF5C68;
+}
+
+body {
+  margin: 0;
+  background-color: #0B0B0B;
+  color: #FFFFFF;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Background Cyber Grid & Halftone Motif */
+.bg-grid-cyber {
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+.bg-halftone-pattern {
+  background-image: radial-gradient(rgba(255, 45, 168, 0.08) 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0B0B;
+}
+::-webkit-scrollbar-thumb {
+  background: #282828;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #FF2DA8;
+}
+
+/* Glow highlights */
+.glow-pink {
+  box-shadow: 0 0 20px -3px rgba(255, 45, 168, 0.35);
+}
+
+.glow-chartreuse {
+  box-shadow: 0 0 20px -3px rgba(212, 255, 63, 0.35);
+}
+
+.border-pink-glow {
+  border-color: rgba(255, 45, 168, 0.5);
+  box-shadow: 0 0 10px rgba(255, 45, 168, 0.2);
+}
